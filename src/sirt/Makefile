@@ -6,7 +6,6 @@ ROOTDIR = ../..
 # Bin directory
 BINDIR = ${ROOTDIR}/bin/
 
-
 # Flags
 CFLAGS = -std=c++11 -O2 -Wall -Wextra 
 CFLAGS += -g -ffast-math -fPIC -DTIMERON #-DPREFETCHON #-mprfchw 
