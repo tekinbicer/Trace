@@ -9,6 +9,8 @@ BINDIR = ${ROOTDIR}/bin/
 
 # ------ Flags ------
 # TIMERON: 				Collects time information and prints this at the end ot exec.
+# PREFETCHON:			Enables hw level prefetching during the reconstruction. May
+# 								not work on all CPUs.
 # BGPM_PROFILER: 	Collects BGPM profiler information and prints at the end of 
 # 								exec. Currently only L2 cache and FLOPS information are 
 # 								collected. Available only on BG/Q machines.
