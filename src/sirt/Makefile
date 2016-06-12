@@ -1,5 +1,5 @@
 # Compiler
-CC = g++
+CC = clang++
 
 # Directories
 ROOTDIR = ../..
@@ -7,9 +7,13 @@ ROOTDIR = ../..
 BINDIR = ${ROOTDIR}/bin/
 
 
-# Flags
+# ------ Flags ------
+# TIMERON: 				Collects time information and prints this at the end ot exec.
+# BGPM_PROFILER: 	Collects BGPM profiler information and prints at the end of 
+# 								exec. Currently only L2 cache and FLOPS information are 
+# 								collected. Available only on BG/Q machines.
 CFLAGS = -std=c++11 -O2 -Wall -Wextra 
-CFLAGS += -g -ffast-math -fPIC -DTIMERON #-DPREFETCHON #-mprfchw 
+CFLAGS += -g -ffast-math -fPIC -DTIMERON #-DBGPM_PROFILER #-DPREFETCHON #-mprfchw 
 #CFLAGS += -Rpass-analysis=loop-vectorize -S -mllvm --x86-asm-syntax=intel
 
 # Common data structures and utilities classes
@@ -23,9 +27,14 @@ HDF5INC = ${HDF5_HOME}/include
 MPILIB = ${MPI_HOME}/lib
 MPIINC = ${MPI_HOME}/inc
 
-LIBS = -lm -lhdf5 -lz -lmpi 
-LIBDIRS = -L$(HDF5LIB) -L$(MPILIB)
-INCLUDES = -I$(DISPDIR) -I${COMMONDIR} -I$(HDF5INC) -I$(MPIINC)
+BGPMLIB = ${BGPM_HOME}/lib
+BGPMINC = ${BGPM_HOME}/inc
+
+LIBDIRS = -L$(HDF5LIB) -L$(MPILIB) #-L${BGPMLIB}
+INCLUDES = -I$(DISPDIR) -I${COMMONDIR} -I$(HDF5INC) -I$(MPIINC) #-I${BGPMINC}
+
+LIBS = -lm -lhdf5 -lz -lmpi -lrt 
+#LIBS += -lbgpm
 
 # Executable/reconstruction objects
 SIRT_OBJS = sirt.o sirt_main.o #sirt_main_model.o #sirt_main.o
