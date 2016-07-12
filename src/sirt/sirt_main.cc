@@ -5,7 +5,7 @@
 #include "data_region_base.h"
 #include "disp_engine_reduction.h"
 #include "sirt.h"
-#include "bgpm_profiler.h"
+//#include "bgpm_profiler.h"
 
 class TraceRuntimeConfig {
   public:
@@ -176,9 +176,8 @@ int main(int argc, char **argv)
   std::chrono::duration<double> recon_tot(0.), inplace_tot(0.), update_tot(0.);
   #endif
 #ifdef BGPM_PROFILER
-  BGPMProfiler profiler();
-  profiler.init();
-  profiler.start();
+  bgpm_profiler_init();
+  bgpm_profiler_start();
 #endif
   for(int i=0; i<config.iteration; ++i){
     std::cout << "Iteration: " << i << std::endl;
@@ -207,9 +206,9 @@ int main(int argc, char **argv)
     slices->ResetMirroredRegionIter();
   }
 #ifdef BGPM_PROFILER
-  profiler.stop();
-  profiler.print();
-  profiler.finalize();
+  bgpm_profiler_stop();
+  bgpm_profiler_print();
+  bgpm_profiler_finalize();
 #endif
   /**************************/
 

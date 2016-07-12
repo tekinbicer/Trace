@@ -20,8 +20,9 @@ class TDataMock
     int num_cols_;
     int num_iter_;
     int num_threads_;
+    int num_all_slices_;
 
-    void ParseArgs(int argc, char **argv)
+    void ParseArgs(int argc, char **argv, int mpi_size, int myrank)
     {
       int c;
       extern char *optarg;
@@ -45,7 +46,7 @@ class TDataMock
             num_cols_ = atoi(optarg);
             break;
           case 's':
-            num_slices_= atoi(optarg);
+            num_all_slices_= atoi(optarg);
             break;
           case 'i':
             num_iter_= atoi(optarg);
@@ -62,11 +63,14 @@ class TDataMock
              exit(0);
         }
       }
-      std::cout << "# Projections=" << num_projs_ <<
-        "; # Slices=" << num_slices_ <<
-        "; # Columns=" << num_cols_ <<
-        "; # Iterations=" << num_iter_ <<
-        "; # Threads=" << num_threads_ << std:: endl;
+      num_slices_ = num_all_slices_/mpi_size;
+      if(myrank==0)
+        std::cout << "# Projections=" << num_projs_ <<
+          "; # All Slices=" << num_all_slices_ <<
+          "; # Slices=" << num_slices_ <<
+          "; # Columns=" << num_cols_ <<
+          "; # Iterations=" << num_iter_ <<
+          "; # Threads=" << num_threads_ << std:: endl;
     }
 
   public:
@@ -88,9 +92,9 @@ class TDataMock
       theta_ = new float[num_projs_];
     }
 
-    TDataMock(int argc, char **argv)
+    TDataMock(int argc, char **argv, int mpi_size, int myrank)
     {
-      ParseArgs(argc,argv);
+      ParseArgs(argc, argv, mpi_size, myrank);
       data_ = new float[num_projs_*num_slices_*num_cols_];
       theta_ = new float[num_projs_];
     }
@@ -135,10 +139,11 @@ int main(int argc, char **argv)
   /* Initiate middleware's communication layer */
   DISPCommBase<float> *comm =
         new DISPCommMPI<float>(&argc, &argv);
-  std::cout << "MPI rank: "<< comm->rank() << "; MPI size: " << comm->size() << std::endl;
+  if(comm->rank() == 0)
+    std::cout << "MPI rank: "<< comm->rank() << "; MPI size: " << comm->size() << std::endl;
 
   auto dg_beg_time = std::chrono::high_resolution_clock::now();
-  TDataMock mock_data(argc, argv);
+  TDataMock mock_data(argc, argv, comm->size(), comm->rank());
   mock_data.GenParData(0.);
   mock_data.GenProjTheta(0., 180.);
   std::chrono::duration<double> dg_time = 
@@ -150,12 +155,12 @@ int main(int argc, char **argv)
   // TraceMetadata internally creates reconstruction object
   TraceMetadata trace_metadata(
       static_cast<float *>(mock_data.theta()),  /// float const *theta,
-      0,                                  /// int const proj_id,
-      mock_data.beg_index(),                          /// int const slice_id,
-      0,                                  /// int const col_id,
-      mock_data.num_slices(),     /// int const num_tot_slices,
-      mock_data.num_projs(),     /// int const num_projs,
-      mock_data.num_slices(),                           /// int const num_slices,
+      0,                        /// int const proj_id,
+      mock_data.beg_index(),    /// int const slice_id,
+      0,                        /// int const col_id,
+      mock_data.num_slices(),   /// int const num_tot_slices,
+      mock_data.num_projs(),    /// int const num_projs,
+      mock_data.num_slices(),   /// int const num_slices,
       mock_data.num_cols(),     /// int const num_cols,
       mock_data.num_cols(),     /// int const num_grids,
       0.);         /// float const center
