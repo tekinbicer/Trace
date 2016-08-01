@@ -4,21 +4,43 @@
 #include "mpi.h"
 #include "trace_h5io.h"
 
+void trace_io::DistributeProjectionRows(
+    int mpi_rank, int mpi_size,
+    int n_proj_blocks, int &beg_projection_index, int &n_assigned_projections)
+{
+  int base = floor(n_proj_blocks/mpi_size);
+  int remain = n_proj_blocks - (base*mpi_size);
+
+  beg_projection_index =
+    (mpi_rank < remain)? (base+1)*mpi_rank :
+    ((base+1)*remain) + (base * (mpi_rank-remain));
+
+  int final_projection_index =
+    (mpi_rank < remain) ? beg_projection_index + (base+1) : beg_projection_index + base;
+
+  n_assigned_projections = final_projection_index - beg_projection_index;
+}
+
 void trace_io::DistributeSlices(
     int mpi_rank, int mpi_size,
     int n_dblocks, int &beg_index, int &n_assigned_blocks)
 {
-  int base = floor(n_dblocks/mpi_size);
-  int remain = n_dblocks - (base*mpi_size);
+  float dist = (1.*n_dblocks)/mpi_size;
+  beg_index = floor(dist*mpi_rank);
 
-  beg_index =
-    (mpi_rank < remain)? (base+1)*mpi_rank :
-    ((base+1)*remain) + (base * (mpi_rank-remain));
+  n_assigned_blocks = ceil(dist);
+  //int base = floor(n_dblocks/mpi_size);
+  //int remain = n_dblocks - (base*mpi_size);
 
-  int final_slice =
-    (mpi_rank < remain) ? beg_index + (base+1) : beg_index + base;
+  //beg_index =
+  //  (mpi_rank < remain)? (base+1)*mpi_rank :
+  //  ((base+1)*remain) + (base * (mpi_rank-remain));
 
-  n_assigned_blocks = final_slice - beg_index;
+  //int final_slice =
+  //  (mpi_rank < remain) ? beg_index + (base+1) : beg_index + base;
+
+  //n_assigned_blocks = final_slice - beg_index;
+  //std::cout << mpi_rank << ": beg_slice_index=" << beg_index << "; n_assigned_blocks=" << n_assigned_blocks << std::endl;
 }
 
 trace_io::H5Metadata* trace_io::ReadMetadata(
@@ -365,7 +387,87 @@ trace_io::H5Data* trace_io::ReadProjections(H5Metadata *metadata_p,
   return l_data;
 }
 
-void trace_io::WriteData(
+void trace_io::SWriteData(
+    float *recon, /* Data values */
+    hsize_t ndims, hsize_t *dims, /* This process' dimension values */
+    int slice_id, /* Starting slice id, for calculating dest. offset address */
+    hsize_t dataset_ndims, hsize_t *dataset_dims, /* Dataset dimension values */
+    int target_dim,
+    char const *file_name, char const *dataset_name)
+{ 
+  if(ndims!=3 || recon==NULL || file_name==NULL || dataset_name==NULL)
+    throw std::runtime_error("Wrong input parameter is passed");
+
+  /* Create a new file collectively and release property list identifier. */
+  /* H5F_ACC_TRUNC: Overwrites if exists */
+  hid_t file_id = H5Fcreate(file_name, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+
+  /* Create the dataspace for the dataset */
+  /* Relying on casting data fails in this case!
+   * Make sure you pass the correct data type to the HDF5 functions!
+   */
+  hsize_t *dataset_ddims = (hsize_t *)calloc(dataset_ndims, sizeof(hsize_t));
+  for(hsize_t i=0; i<dataset_ndims; ++i)
+    dataset_ddims[i] = dataset_dims[i];
+  hid_t filespace = H5Screate_simple(dataset_ndims, dataset_ddims, NULL);
+
+  /* Create the dataset with default properties and close filespace */
+
+  hid_t dset_id =
+    H5Dcreate(file_id, dataset_name, H5T_NATIVE_FLOAT, filespace,
+        H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  H5Sclose(filespace);
+
+  /* Setup memory space and its hyperslab */
+  /*
+   *      hsize_t *m_offset = calloc(ndims, sizeof(hsize_t));
+   *      hsize_t *m_block = calloc(ndims, sizeof(hsize_t));
+   *
+   *      m_block[0] = dims[0];
+   *      m_block[1] = dims[1];
+   *      m_block[2] = dims[2];
+   */
+
+  hsize_t *m_count = (hsize_t*) calloc(ndims, sizeof(hsize_t));
+  for(hsize_t i=0; i<ndims; ++i)
+    m_count[i] = dims[i];
+  hid_t memspace = H5Screate_simple(ndims, m_count, NULL);
+
+  /* Below might be unnecessary, since we work on the whole memory */
+  /*
+   * herr_t status = H5Sselect_hyperslab(memspace, H5S_SELECT_SET, 
+   * m_offset, NULL, m_count, m_block);
+   */
+  /* End of memory space and hyberslap selection */
+
+  /* Setup offset addresses and select hyperslab in the file */
+  /* {0, 0, 0} */
+  hsize_t *d_offset = (hsize_t*) calloc(ndims, sizeof(hsize_t));
+  d_offset[target_dim] = slice_id;
+
+  hsize_t *d_count = (hsize_t*) calloc(ndims, sizeof(hsize_t));
+  for(hsize_t i=0; i<ndims; ++i)
+    d_count[i] = dims[i];
+  filespace = H5Dget_space(dset_id);
+  H5Sselect_hyperslab(filespace, H5S_SELECT_SET, d_offset, NULL,
+      d_count, NULL);
+  /* End of dataset hyperslab selection */
+
+  /* Create property list for collective dataset write */
+  H5Dwrite(dset_id, H5T_NATIVE_FLOAT, memspace, filespace,
+      H5P_DEFAULT, recon);
+
+  /* Close/release resources */
+  H5Dclose(dset_id);
+  H5Sclose(filespace);
+  H5Sclose(memspace);
+  H5Fclose(file_id);
+
+  free(dataset_ddims);
+  free(d_offset);
+}
+
+void trace_io::PWriteData(
     float *recon, /* Data values */
     hsize_t ndims, hsize_t *dims, /* This process' dimension values */
     int slice_id, /* Starting slice id, for calculating dest. offset address */
@@ -492,12 +594,20 @@ void trace_io::WriteRecon(
     rank_metadata.num_neighbor_recon_slices()*
     rank_metadata.num_grids() * rank_metadata.num_grids();
 
-  WriteData(
+  SWriteData(
       &recon[recon_slice_data_index],
       ndims, rank_dims,
       rank_metadata.slice_id(),
       ndims, app_dims,
       0,
-      output_path.c_str(), dataset_path.c_str(),
-      MPI_COMM_WORLD, MPI_INFO_NULL, mpio_xfer_flag);
+      output_path.c_str(), dataset_path.c_str());
+
+  //WriteData(
+  //    &recon[recon_slice_data_index],
+  //    ndims, rank_dims,
+  //    rank_metadata.slice_id(),
+  //    ndims, app_dims,
+  //    0,
+  //    output_path.c_str(), dataset_path.c_str(),
+  //    MPI_COMM_WORLD, MPI_INFO_NULL, mpio_xfer_flag);
 }

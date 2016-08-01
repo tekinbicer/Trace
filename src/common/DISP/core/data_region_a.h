@@ -89,6 +89,19 @@ class ADataRegion {
      */
     size_t index() const { return index_; }
 
+    /**
+     * \brief Setter for #index_.
+     *
+     * Sets the current index to the defined location at the mirrored data 
+     * region. Also see #index_.
+     */
+    void index(size_t ind) { 
+      if(index>=count_) 
+        throw std::out_of_range("Index range " << ind 
+          << " is out of bound (" << count_ << ")");
+      else index_ = ind; 
+    }
+
 
   public:
     /**
@@ -168,7 +181,7 @@ class ADataRegion {
      * \brief Enables access to #data_ using [] operator.
      *
      * This operator does not perform any checks while accessig the target 
-     * index. For controlled reads and writes see #GetItem() and #SetItem().
+     * index. For controlled reads and writes see #item().
      */
     T& operator[](size_t index) { return data_[index]; }
     const T& operator[](size_t index) const { return data_[index]; }

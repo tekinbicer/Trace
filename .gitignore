@@ -39,6 +39,7 @@
 
 # Log/Output/Error files
 *log
+*logs
 *.error
 *.output
 log/

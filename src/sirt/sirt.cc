@@ -27,8 +27,9 @@ void SIRTReconSpace::UpdateRecon(
   for(size_t i=0; i<rows; ++i){
     auto replica = comb_replica[i];
     for(size_t j=0; j<cols; ++j)
-      recon[i*cols + j] +=
-        replica[j*2] / replica[j*2+1];
+      if(replica[j*2+1]!=0.0)
+        recon[i*cols + j] +=
+          replica[j*2] / replica[j*2+1];
   }
 }
 
@@ -49,17 +50,19 @@ void SIRTReconSpace::UpdateReconReplica(
   for (int i=0; i<len-1; ++i)
     a2 += leng2[i];
 
-  upd = (ray-simdata) / a2;
+  if(a2!=0.0){
+    upd = (ray-simdata) / a2;
 
-  int i=0;
-  for (; i<(len-1); ++i) {
+    int i=0;
+    for (; i<(len-1); ++i) {
 #ifdef PREFETCHON
-    size_t index2 = indi[i+32]*2;
-    __builtin_prefetch(slice+index2,1,0);
+      size_t index2 = indi[i+32]*2;
+      __builtin_prefetch(slice+index2,1,0);
 #endif
-    size_t index = indi[i]*2;
-    slice[index] += leng[i]*upd; 
-    slice[index+1] += leng[i];
+      size_t index = indi[i]*2;
+      slice[index] += leng[i]*upd; 
+      slice[index+1] += leng[i];
+    }
   }
 }
 
@@ -108,12 +111,22 @@ void SIRTReconSpace::Reduce(MirroredRegionBareBase<float> &input)
   int num_cols = metadata.num_cols();
   int num_grids = metadata.num_cols();
 
-  int curr_proj = metadata.RayProjection(rays.index());
+  int curr_proj = metadata.RayProjection(rays.index())+metadata.proj_id();
   int count_projs = 
-    metadata.RayProjection(rays.index()+rays.count()-1) - curr_proj;
+    metadata.RayProjection(rays.index()+rays.count())+metadata.proj_id() - curr_proj;
+
+  //int rank;
+  //MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  //std::cout << rank << ": ray_count=" << rays.count() << 
+  //  "; ray_index=" << rays.index() << 
+  //  "; curr_proj=" << curr_proj << 
+  //  "; final_ray_proj=" << metadata.RayProjection(rays.index()+rays.count()) << 
+  //  "; count_projs="<< count_projs <<
+  //  "; curr slice=" << metadata.RaySlice(rays.index()) << std::endl;
 
   /* Reconstruction start */
-  for (int proj = curr_proj; proj<=(curr_proj+count_projs); ++proj) {
+  //for (int proj = curr_proj; proj<(curr_proj+count_projs); ++proj) {
+  int proj=curr_proj;
     float theta_q = theta[proj];
     int quadrant = trace_utils::CalculateQuadrant(theta_q);
     float sinq = sinf(theta_q);
@@ -182,5 +195,5 @@ void SIRTReconSpace::Reduce(MirroredRegionBareBase<float> &input)
           len);
       /*******************************************************/
     }
-  }
+  //}
 }

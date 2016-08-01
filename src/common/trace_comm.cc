@@ -1,5 +1,4 @@
 #include "trace_comm.h"
-#include "mpi.h"
 
 void trace_comm::GlobalNeighborUpdate(
     ADataRegion<float> &recon_a,
@@ -65,3 +64,33 @@ void trace_comm::GlobalNeighborUpdate(
     MPI_Waitall(2, requests, statuses);
   }
 }
+
+void trace_comm::SetupSliceCommGroups(
+  int slice_id, 
+  MPI_Comm &newcomm)
+{
+  int mpi_rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank);
+  MPI_Comm_split(MPI_COMM_WORLD, slice_id, mpi_rank, &newcomm);
+}
+
+
+void trace_comm::UpdateReconReplicasCommGroups(
+  DataRegion2DBareBase<float> &dr,
+  MPI_Comm &group_comm)
+{
+  for(size_t i=0; i<dr.num_rows(); i++)
+    MPI_Allreduce(MPI_IN_PLACE, &dr[i][0], dr.num_cols(), MPI_FLOAT,
+        MPI_SUM, group_comm);
+}
+
+
+void trace_comm::UpdateSliceCommGroups(
+  ADataRegion<float> &recon_a,
+  size_t slice_size,
+  MPI_Comm &slice_comm)
+{
+  MPI_Allreduce(MPI_IN_PLACE, &recon_a[0], slice_size, MPI_FLOAT, MPI_SUM, slice_comm);
+}
+
+

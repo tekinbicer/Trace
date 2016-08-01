@@ -22,6 +22,10 @@ namespace trace_io {
     H5Metadata *metadata;
   } H5Data;
 
+  void DistributeProjectionRows(
+    int mpi_rank, int mpi_size,
+    int n_proj_blocks, int &beg_projection_index, int &n_assigned_projections);
+
   void DistributeSlices(
       int mpi_rank, int mpi_size,
       int n_dblocks, int &beg_index, int &n_assigned_blocks);
@@ -38,7 +42,15 @@ namespace trace_io {
   H5Data* ReadProjections(H5Metadata *metadata_p,
       int beg_projection, int count, int filter_id);
 
-  void WriteData(
+  void SWriteData(
+      float *recon, /* Data values */
+      hsize_t ndims, hsize_t *dims, /* This process' dimension values */
+      int slice_id, /* Starting slice id, for calculating dest. offset address */
+      hsize_t dataset_ndims, hsize_t *dataset_dims, /* Dataset dimension values */
+      int target_dim,
+      char const *file_name, char const *dataset_name);
+
+  void PWriteData(
       float *recon, /* Data values */
       hsize_t ndims, hsize_t *dims, /* This process' dimension values */
       int slice_id, /* Starting slice id, for calculating dest. offset address */

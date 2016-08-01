@@ -1,5 +1,7 @@
 #include "mpi.h"
+#include "sched.h"
 #include "trace_h5io.h"
+#include "trace_comm.h"
 #include "tclap/CmdLine.h"
 #include "disp_comm_mpi.h"
 #include "data_region_base.h"
@@ -66,6 +68,13 @@ class TraceRuntimeConfig {
         center = argCenter.getValue();
         thread_count = argThreadCount.getValue();
 
+        /*
+        int len;
+        char name[MPI_MAX_PROCESSOR_NAME];
+        MPI_Get_processor_name( name, &len );
+        std::cout << "mpi rank info: procname=" << name << "; cpuid=" << sched_getcpu() << std::endl; 
+        */
+
         if(rank==0)
         {
           std::cout << "MPI rank:"<< rank << "; MPI size:" << size << std::endl;
@@ -96,6 +105,7 @@ int main(int argc, char **argv)
 
   /* Read slice data and setup job information */
   #ifdef TIMERON
+  auto app_beg=std::chrono::system_clock::now();
   std::chrono::duration<double> read_tot(0.);
   auto read_beg = std::chrono::system_clock::now();
   #endif
@@ -109,6 +119,21 @@ int main(int argc, char **argv)
   auto input_slice = 
     trace_io::ReadSlices(d_metadata, beg_index, n_blocks, 0);
 
+  /* Check if a sinogram needs to be processed more than one rank */
+  MPI_Comm slice_comm;
+  int beg_projection_index=0;
+  int n_assigned_projections=d_metadata->dims[0];
+  int group_rank, group_size;
+  if(comm->size()>n_blocks){
+    trace_comm::SetupSliceCommGroups(beg_index, slice_comm);
+
+    MPI_Comm_rank(slice_comm, &group_rank);
+    MPI_Comm_size(slice_comm, &group_size);
+    trace_io::DistributeProjectionRows(
+        group_rank, group_size,
+        d_metadata->dims[0], beg_projection_index, n_assigned_projections);
+  }
+
   /* Read theta data */
   auto t_metadata = trace_io::ReadMetadata(
         config.kThetaFilePath.c_str(), 
@@ -118,28 +143,35 @@ int main(int argc, char **argv)
   read_tot += (std::chrono::system_clock::now()-read_beg);
   #endif
   /* Convert degree values to radian */
-  trace_utils::DegreeToRadian(*theta);
+  //trace_utils::DegreeToRadian(*theta);
 
   /* Setup metadata data structure */
   // INFO: TraceMetadata destructor frees theta->data!
   // TraceMetadata internally creates reconstruction object
   TraceMetadata trace_metadata(
       static_cast<float *>(theta->data),  /// float const *theta,
-      0,                                  /// int const proj_id,
+      beg_projection_index,               /// int const proj_id,
       beg_index,                          /// int const slice_id,
       0,                                  /// int const col_id,
       input_slice->metadata->dims[1],     /// int const num_tot_slices,
-      input_slice->metadata->dims[0],     /// int const num_projs,
+      n_assigned_projections,             /// int const num_projs,
       n_blocks,                           /// int const num_slices,
       input_slice->metadata->dims[2],     /// int const num_cols,
       input_slice->metadata->dims[2],     /// int const num_grids,
       config.center);         /// float const center
 
   // INFO: DataRegionBase destructor deletes input_slice.data pointer
-  ADataRegion<float> *slices = 
+  float *data_loc = static_cast<float *>(input_slice->data)+
+    trace_metadata.proj_id()*trace_metadata.num_slices()*trace_metadata.num_cols();
+  size_t data_count =
+    trace_metadata.num_projs()*trace_metadata.num_slices()*trace_metadata.num_cols();
+
+  auto slices = 
     new DataRegionBase<float, TraceMetadata>(
-        static_cast<float *>(input_slice->data),
-        trace_metadata.count(),
+        //static_cast<float *>(input_slice->data),
+        data_loc,
+        data_count,
+        //trace_metadata.count(),
         &trace_metadata);
 
   /***********************/
@@ -172,10 +204,10 @@ int main(int argc, char **argv)
   int64_t req_number = trace_metadata.num_cols();
 
   #ifdef TIMERON
-  std::chrono::duration<double> recon_tot(0.), inplace_tot(0.), update_tot(0.);
+  std::chrono::duration<double> recon_tot(0.), inplace_tot(0.), update_tot(0.),
+    write_tot(0.), update_slice_groups_tot(0.), barrier_time_tot(0.);
   #endif
   for(int i=0; i<config.iteration; ++i){
-    std::cout << "Iteration: " << i << std::endl;
     #ifdef TIMERON
     auto recon_beg = std::chrono::system_clock::now();
     #endif
@@ -187,14 +219,57 @@ int main(int argc, char **argv)
     engine->ParInPlaceLocalSynchWrapper();              /// Local combination
     #ifdef TIMERON
     inplace_tot += (std::chrono::system_clock::now()-inplace_beg);
-
-    /// Update reconstruction object
+    auto update_slice_groups_beg = std::chrono::system_clock::now();
+    #endif
+    if(comm->size()>n_blocks){
+      trace_comm::UpdateReconReplicasCommGroups(
+          main_recon_replica,
+          slice_comm);
+    }
+    #ifdef TIMERON
+    update_slice_groups_tot += (std::chrono::system_clock::now()-update_slice_groups_beg);
     auto update_beg = std::chrono::system_clock::now();
     #endif
+    /// Update reconstruction object
     main_recon_space->UpdateRecon(trace_metadata.recon(), main_recon_replica);
     #ifdef TIMERON
     update_tot += (std::chrono::system_clock::now()-update_beg);
     #endif
+
+    //if(i%5 == 0){
+    //  #ifdef TIMERON
+    //  auto write_beg = std::chrono::system_clock::now();
+    //  #endif
+    //  std::ostringstream full_path;
+    //  full_path << config.kReconOutputPath << ".iter." << i << ".h5";
+    //  if(comm->rank()==0)
+    //    //TODO: Single write!
+    //    trace_io::WriteRecon(
+    //        trace_metadata, *d_metadata, 
+    //        full_path.str(),
+    //        config.kReconDatasetPath);
+    //  #ifdef TIMERON
+    //  std::chrono::duration<double> write_curr = (std::chrono::system_clock::now()-write_beg);
+
+    //  std::cout << comm->rank() << ": Iteration: " << i  << "; Write time=" << write_curr.count()<< std::endl;
+    //  write_tot += write_curr; 
+    //  if(comm->rank()==0){
+    //    std::cout << "Reconstruction time=" << recon_tot.count() << std::endl;
+    //    std::cout << "Local combination time=" << inplace_tot.count() << std::endl;
+    //    std::cout << "Update time=" << update_tot.count() << std::endl;
+    //    std::cout << "Read time=" << read_tot.count() << std::endl;
+    //    std::cout << "Write total time=" << write_tot.count() << std::endl;
+    //  }
+    //  #endif
+    //}
+    if(comm->rank()==0){
+      std::cout << "Iteration=" << i << 
+        "; Reconstruction time=" << recon_tot.count() <<
+        "; Local combination time=" << inplace_tot.count() << 
+        "; Slice group update=" << update_slice_groups_tot.count() <<
+        "; Update time=" << update_tot.count() <<
+        "; Read time=" << read_tot.count() << std::endl;
+    }
     
     /// Reset iteration
     engine->ResetReductionSpaces(init_val);
@@ -202,36 +277,45 @@ int main(int argc, char **argv)
   }
   /**************************/
 
+  MPI_Barrier(MPI_COMM_WORLD);
   /* Write reconstructed data to disk */
-  #ifdef TIMERON
-  std::chrono::duration<double> write_tot(0.);
-  auto write_beg = std::chrono::system_clock::now();
-  #endif
-  trace_io::WriteRecon(
-      trace_metadata, *d_metadata, 
-      config.kReconOutputPath, 
-      config.kReconDatasetPath);
-  #ifdef TIMERON
-  write_tot += (std::chrono::system_clock::now()-write_beg);
-
   if(comm->rank()==0){
-    std::cout << "Reconstruction time=" << recon_tot.count() << std::endl;
-    std::cout << "Local combination time=" << inplace_tot.count() << std::endl;
-    std::cout << "Update time=" << update_tot.count() << std::endl;
-    std::cout << "Read time=" << read_tot.count() << std::endl;
-    std::cout << "Write time=" << write_tot.count() << std::endl;
+    #ifdef TIMERON
+    std::chrono::duration<double> write_tot(0.);
+    auto write_beg = std::chrono::system_clock::now();
+    #endif
+    trace_io::WriteRecon(
+        trace_metadata, *d_metadata, 
+        config.kReconOutputPath+".final.h5", 
+        config.kReconDatasetPath);
+    #ifdef TIMERON
+    write_tot += (std::chrono::system_clock::now()-write_beg);
+
+
+    std::chrono::duration<double> app_time = (std::chrono::system_clock::now()-app_beg);
+
+    std::cout << "Summary: Reconstruction time=" << recon_tot.count()
+      << "; Local combination time=" << inplace_tot.count()
+      << "; Update time=" << update_tot.count()
+      << "; Slice group update=" << update_slice_groups_tot.count()
+      << "; Read time=" << read_tot.count()
+      << "; Write total time=" << write_tot.count() 
+      << "; App total time=" << app_time.count() 
+      << "; Synch time=" << app_time.count()-(recon_tot.count()+inplace_tot.count()+update_tot.count()+update_slice_groups_tot.count()+read_tot.count()+write_tot.count())<< std::endl;
+    #endif
   }
-  #endif
 
   /* Clean-up the resources */
   delete d_metadata->dims;
   delete d_metadata;
-  delete slices;
+  //delete slices;
   delete t_metadata->dims;
   delete t_metadata;
   delete theta;
   delete engine;
   delete input_slice;
   delete comm;
+
+  //std::cout << "Finalizing w/o freeing slices!" << std::endl;
 }
 

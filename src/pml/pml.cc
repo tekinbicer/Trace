@@ -1,4 +1,5 @@
 #include "pml.h"
+#include "mpi.h"
 
 void PMLReconSpace::UpdateRecon(
     PMLDataRegion &slices,                      // Input slices, metadata, recon
@@ -287,12 +288,20 @@ void PMLReconSpace::Reduce(MirroredRegionBareBase<float> &input)
   int num_cols = metadata.num_cols();
   int num_grids = metadata.num_cols();
 
-  int curr_proj = metadata.RayProjection(rays.index());
+  int curr_proj = metadata.RayProjection(rays.index())+metadata.proj_id();
   int count_projs = 
-    metadata.RayProjection(rays.index()+rays.count()-1) - curr_proj;
+    //metadata.RayProjection(rays.index()+rays.count()-1) - curr_proj;
+    metadata.RayProjection(rays.index()+rays.count())+metadata.proj_id() - curr_proj;
+
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  std::cout << rank << ": ray_count=" << rays.count() << "; ray_index=" << rays.index() 
+    << "; curr_proj=" << curr_proj << "; count_projs="<< count_projs 
+    << std::endl;
+  //MPI_Barrier(MPI_COMM_WORLD);
 
   /* Reconstruction start */
-  for (int proj = curr_proj; proj<=(curr_proj+count_projs); ++proj) {
+  for (int proj = curr_proj; proj<(curr_proj+count_projs); ++proj) {
     float theta_q = theta[proj];
     int quadrant = trace_utils::CalculateQuadrant(theta_q);
     float sinq = sinf(theta_q);
@@ -300,7 +309,11 @@ void PMLReconSpace::Reduce(MirroredRegionBareBase<float> &input)
 
     int curr_slice = metadata.RaySlice(rays.index());
     int curr_slice_offset = curr_slice*num_grids*num_grids;
+    //std::cout << "proj=" << proj << "; curr_slice=" << curr_slice 
+    //  << "; curr slice offset=" << curr_slice_offset << std::endl;
     float *recon = (&(metadata.recon()[0])+curr_slice_offset);
+
+
 
     for (int curr_col=0; curr_col<num_cols; ++curr_col) {
       /// Calculate coordinates
@@ -350,11 +363,20 @@ void PMLReconSpace::Reduce(MirroredRegionBareBase<float> &input)
        */
       /// Forward projection
       float simdata = CalculateSimdata(recon, len, indi, leng);
+      //size_t ray_off = proj*metadata.num_slices()*metadata.num_cols() + curr_col;
+      //std::cout << rank << ": ray offset=" << 
+      //  ray_off << "; ray index=" << rays.index() <<
+      //  "; proj=" <<  proj << 
+      //  "; num_slices=" << metadata.num_slices() <<
+      //  "; num_cols=" << metadata.num_cols() << 
+      //  "; curr col=" << curr_col << 
+      //  "; addr=" << &rays[ray_off] << 
+      //  std::endl;
 
       /// Update recon
       UpdateReconReplica(
           simdata, 
-          rays[curr_col], 
+          rays[curr_col],
           recon, 
           curr_slice, 
           indi, 

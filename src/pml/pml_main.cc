@@ -1,5 +1,6 @@
 #include "mpi.h"
 #include "trace_h5io.h"
+#include "trace_comm.h"
 #include "tclap/CmdLine.h"
 #include "disp_comm_mpi.h"
 #include "data_region_base.h"
@@ -112,13 +113,33 @@ int main(int argc, char **argv)
   auto input_slice = 
     trace_io::ReadSlices(d_metadata, beg_index, n_blocks, 0);
 
+  /* Check if a sinogram needs to be processed more than one rank */
+  MPI_Comm slice_comm;
+  int beg_projection_index=0; 
+  int n_assigned_projections=d_metadata->dims[0];
+  int group_rank, group_size;
+  if(comm->size()>n_blocks){
+    trace_comm::SetupSliceCommGroups(beg_index, slice_comm);
+
+    MPI_Comm_rank(slice_comm, &group_rank);
+    MPI_Comm_size(slice_comm, &group_size);
+    trace_io::DistributeProjectionRows(
+      group_rank, group_size, 
+      d_metadata->dims[0], beg_projection_index, n_assigned_projections);
+  }
+
+  std::cout << group_rank
+    << ": beg_projection_index=" << beg_projection_index
+    << "; n_assigned_projections=" << n_assigned_projections
+    << std::endl;
+
   /* Read theta data */
   auto t_metadata = trace_io::ReadMetadata(
         config.kThetaFilePath.c_str(), 
         config.kThetaDatasetPath.c_str());
   auto theta = trace_io::ReadTheta(t_metadata);
   /* Convert degree values to radian */
-  // trace_utils::DegreeToRadian(*theta);
+  trace_utils::DegreeToRadian(*theta);
   trace_utils::Absolute(
       static_cast<float *>(input_slice->data),
       input_slice->count);
@@ -128,11 +149,11 @@ int main(int argc, char **argv)
   // TraceMetadata internally creates reconstruction object
   TraceMetadata trace_metadata(
       static_cast<float *>(theta->data),  /// float const *theta,
-      0,                                  /// int const proj_id,
+      beg_projection_index,               /// int const proj_id,
       beg_index,                          /// int const slice_id,
       0,                                  /// int const col_id,
       input_slice->metadata->dims[1],     /// int const num_tot_slices,
-      input_slice->metadata->dims[0],     /// int const num_projs,
+      n_assigned_projections,             /// int const num_projs,
       n_blocks,                           /// int const num_slices,
       input_slice->metadata->dims[2],     /// int const num_cols,
       input_slice->metadata->dims[2],     /// int const num_grids,
@@ -141,10 +162,21 @@ int main(int argc, char **argv)
       1.);                                /// float const recon_init_val
 
   // INFO: DataRegionBase destructor deletes input_slice.data pointer
+  float *data_loc = static_cast<float *>(input_slice->data)+
+    trace_metadata.proj_id()*trace_metadata.num_slices()*trace_metadata.num_cols();
+  size_t data_count = 
+    trace_metadata.num_projs()*trace_metadata.num_slices()*trace_metadata.num_cols();
+  std::cout << comm->rank() << ": data_loc=" << data_loc-static_cast<float *>(input_slice->data)
+    << "; data_count="<< data_count << std::endl;
+
   auto slices = 
     new PMLDataRegion(
-        static_cast<float *>(input_slice->data),
-        trace_metadata.count(),
+        /// Reset the pointer to the correct projection index,
+        /// this is required for num_nodes>num_slices case.
+        //static_cast<float *>(input_slice->data),
+        data_loc,
+        data_count,
+        //trace_metadata.count(),
         &trace_metadata);
 
   /***********************/
@@ -167,7 +199,7 @@ int main(int argc, char **argv)
         comm,
         main_recon_space,
         config.thread_count); 
-          /// # threads (0 for auto assign the number of threads)
+        /// # threads (0 for auto assign the number of threads)
   /**********************/
 
   /**************************/
@@ -176,7 +208,7 @@ int main(int argc, char **argv)
   int64_t req_number = trace_metadata.num_cols();
 
   for(int i=0; i<config.iteration; ++i){
-    std::cout << "Iteration: " << i << std::endl;
+    std::cout << comm->rank() << ": Iteration: " << i << std::endl;
     engine->RunParallelReduction(*slices, req_number);  /// Reconstruction
     engine->ParInPlaceLocalSynchWrapper();              /// Local combination
     /// main_recon_space has the combined values
@@ -187,7 +219,16 @@ int main(int argc, char **argv)
     /// Update reconstruction object
     main_recon_space->UpdateRecon(*slices, main_recon_replica);
 
-    // Reset iteration
+    /// Check if other ranks worked on the same slice
+    /// if so synch with them
+    if(comm->size()>n_blocks){
+      trace_comm::UpdateSliceCommGroups(
+        slices->metadata().recon(),
+        slices->metadata().num_grids()*slices->metadata().num_grids(),
+        slice_comm);
+    }
+
+    /// Reset iteration
     engine->ResetReductionSpaces(init_val);
     slices->ResetMirroredRegionIter();
   }
@@ -199,14 +240,20 @@ int main(int argc, char **argv)
       config.kReconOutputPath, 
       config.kReconDatasetPath);
 
+  /* Free if there is any slice comm group */
+  if(comm->size()>n_blocks) MPI_Comm_free(&slice_comm);
+
   /* Clean-up the resources */
   delete d_metadata->dims;
   delete d_metadata;
-  delete slices;
+  //delete slices;
   delete t_metadata->dims;
   delete t_metadata;
   delete theta;
   delete engine;
   delete input_slice;
+  delete comm;
+
+  std::cout << "Finalizing w/o freeing slices" << std::endl;
 }
 
