@@ -22,7 +22,11 @@ class DISPCommMPI : public DISPCommBase<DT> {
 
   public:
     DISPCommMPI(int *argc, char ***argv){
-      MPI_Init(argc, argv);
+      int thread_status;
+      MPI_Init_thread(argc, argv, MPI_THREAD_FUNNELED, &thread_status);
+      if(thread_status!=MPI_THREAD_FUNNELED)
+        std::cout << "Warning: MPI thread status: " << thread_status << 
+          "; MPI_THREAD_FUNNELED: " << MPI_THREAD_FUNNELED << std::endl;
       MPI_Comm_rank(MPI_COMM_WORLD, &(this->rank_));
       MPI_Comm_size(MPI_COMM_WORLD, &(this->size_));
     }
