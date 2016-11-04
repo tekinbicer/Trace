@@ -8,8 +8,8 @@ BINDIR = ${ROOTDIR}/bin/
 
 # Flags
 CFLAGS = -O3 -Wall -Wextra -std=c++11 
-CFLAGS += -no-inline-factor -no-inline-max-size -g -fPIC -DTIMERON
-#CFLAGS += -no-prec-div -ansi-alias 
+CFLAGS += -g -ffast-math -fPIC -DTIMERON #-DPREFETCHON #-mprfchw 
+#CFLAGS += -Rpass-analysis=loop-vectorize -S -mllvm --x86-asm-syntax=intel
 
 # Common data structures and utilities classes
 COMMONDIR = ${ROOTDIR}/src/common
@@ -19,27 +19,27 @@ DISPDIR = ${COMMONDIR}/DISP/core
 HDF5LIB = ${HDF5_HOME}/lib
 HDF5INC = ${HDF5_HOME}/include
 
-LIBS = -lm -lhdf5
-LIBDIRS = -L$(HDF5LIB) 
-INCLUDES = -I$(DISPDIR) -I${COMMONDIR} -I$(HDF5INC)
+MPILIB = ${MPI_HOME}/lib
+MPIINC = ${MPI_HOME}/include
+
+LIBS = -lm -lhdf5 -lmpi -lz
+LIBDIRS = -L$(HDF5LIB) -L$(MPILIB)
+INCLUDES = -I$(DISPDIR) -I${COMMONDIR} -I$(HDF5INC) -I$(MPIINC)
 
 # Executable/reconstruction objects
-SIRT_MODEL_OBJS = sirt_main_model.o
-SIRT_OBJS = sirt_main.o
-COMMON_OBJS = sirt.o trace_h5io.o trace_utils.o
+SIRT_OBJS = sirt.o sirt_main.o #sirt_main_model.o #sirt_main.o
+COMMON_OBJS = trace_h5io.o trace_utils.o
 
 # Executables
-MODEL = sirt_model
-PROGS = sirt
+PROGS = sirt #sirt_model 
 
 .PHONY: default clean
 
 all: $(PROGS)
-model: $(MODEL)
 
 # SIRT
-sirt_model: $(COMMON_OBJS) $(SIRT_MODEL_OBJS)
-	$(CC) $(CFLAGS) -o $@ $(SIRT_MODEL_OBJS) $(COMMON_OBJS) $(LIBDIRS) $(LIBS) 
+sirt_model: $(COMMON_OBJS) $(SIRT_OBJS)
+	$(CC) $(CFLAGS) -o $@ $(SIRT_OBJS) $(COMMON_OBJS) $(LIBDIRS) $(LIBS) 
 
 sirt: $(COMMON_OBJS) $(SIRT_OBJS)
 	$(CC) $(CFLAGS) -o $@ $(SIRT_OBJS) $(COMMON_OBJS) $(LIBDIRS) $(LIBS) 
@@ -63,4 +63,4 @@ install:
 	mv $(PROGS) $(BINDIR)
 
 clean:
-	rm -f $(PROGS) $(MODEL) *.o *.a *~ *.lst *.tmp .pure *.bak *.log
+	rm -f $(PROGS) *.o *.a *~ *.lst *.tmp .pure *.bak *.log
