@@ -1,8 +1,7 @@
 #include "mpi.h"
-#include "trace_h5io.h"
 #include "tclap/CmdLine.h"
-#include "disp_comm_mpi.h"
 #include "data_region_base.h"
+#include "disp_comm_mpi.h"
 #include "disp_engine_reduction.h"
 #include "sirt.h"
 
@@ -195,14 +194,19 @@ class TraceRuntimeConfig {
 };
 
 struct TraceData{
-  ADataRegion<float> *sinograms=nullptr;
-  TraceMetadata *metadata=nullptr;
-  ADataRegion& sinograms() const {return *sinograms};
-  TraceMetadata& metadata() const {return *metadata};
-  ~TraceData(){
-    delete sinograms;
-    delete metadata;
-  }
+  public:
+    ADataRegion<float> *sinograms_=nullptr;
+    TraceMetadata *metadata_=nullptr;
+
+    TraceMetadata& metadata() const { return *metadata_; };
+    void metadata(TraceMetadata *metadata__) { metadata_ = metadata__; };
+    ADataRegion<float>& sinograms() const { return *sinograms_; };
+    void sinograms(ADataRegion<float> *sinograms__) { sinograms_ = sinograms__; };
+
+    ~TraceData(){
+      delete sinograms_;
+      delete metadata_;
+    }
 };
 
 class TracePH5IO {
@@ -218,24 +222,36 @@ class TracePH5IO {
     std::string const &thetaFilePath;
     std::string const &thetaDatasetPath;
 
+    float center;
+
     bool const degree_to_radian;
 
-    struct TraceData trace_data;
+    struct TraceData &trace_data;
 
   public:
     TracePH5IO(
       DISPCommBase<float> &kcomm,
+      std::string &kInputFilePath,
+      std::string &kOutputFilePath,
+      std::string &kOutputDatasetPath,
       std::string &kProjectionFilePath,
       std::string &kProjectionDatasetPath,
       std::string &kThetaFilePath,
       std::string &kThetaDatasetPath,
-      bool kdegree_to_radian):
+      float kCenter,
+      bool kdegree_to_radian,
+      struct TraceData &kTraceData):
         comm {kcomm},
+        inputFilePath {kInputFilePath},
+        outputFilePath {kOutputFilePath},
+        outputDatasetPath {kOutputDatasetPath},
         projectionFilePath {kProjectionFilePath},
         projectionDatasetPath {kProjectionDatasetPath},
         thetaFilePath {kThetaFilePath},
         thetaDatasetPath {kThetaDatasetPath},
-        degree_to_radian {kdegree_to_radian}
+        center {kCenter},
+        degree_to_radian {kdegree_to_radian},
+        trace_data {kTraceData}
     {}
 
     TraceData& read(){
@@ -256,8 +272,8 @@ class TracePH5IO {
 
       /* Read theta data */
       auto t_metadata = trace_io::ReadMetadata(
-            config.kThetaFilePath.c_str(), 
-            config.kThetaDatasetPath.c_str());
+            thetaFilePath.c_str(), 
+            thetaDatasetPath.c_str());
       auto theta = trace_io::ReadTheta(t_metadata);
       #ifdef TIMERON
       read_tot += (std::chrono::system_clock::now()-read_beg);
@@ -268,7 +284,7 @@ class TracePH5IO {
       /* Setup metadata data structure */
       // INFO: TraceMetadata destructor frees theta->data!
       // TraceMetadata internally creates reconstruction object
-      trace_data.metadata = new TraceMetadata(
+      trace_data.metadata( new TraceMetadata(
           static_cast<float *>(theta->data),  /// float const *theta,
           0,                                  /// int const proj_id,
           beg_index,                          /// int const slice_id,
@@ -278,15 +294,16 @@ class TracePH5IO {
           n_blocks,                           /// int const num_slices,
           input_slice->metadata->dims[2],     /// int const num_cols,
           input_slice->metadata->dims[2],     /// int const num_grids,
-          config.center);         /// float const center
+          center));         /// float const center
 
       // INFO: DataRegionBase destructor deletes input_slice.data pointer
-      trace_data.sinograms = new DataRegionBase<float, TraceMetadata>(
+      trace_data.sinograms( 
+        new DataRegionBase<float, TraceMetadata>(
           static_cast<float *>(input_slice->data),
-          trace_data.metadata->count(),
-          trace_data.metadata);
+          trace_data.metadata().count(),
+          &trace_data.metadata()));
 
-      return TraceData;
+      return trace_data;
     }
 };
 
@@ -297,46 +314,44 @@ class TraceEngine {
     int iteration;
 
     float recon_space_init_val;
-    std::unordered_map<std::string, boost::any> algs;
 
   public:
     TraceEngine(
       std::string recon_alg, 
       TraceData &trace_data,
+      DISPCommBase<float> &comm,
       int thread_count,
       int iteration
-      ):
+    ):
       trace_data {trace_data},
       thread_count {thread_count},
       iteration {iteration}
     {
-      if(reconAlg=="sirt"){
+      if(recon_alg=="sirt"){
         recon_space_init_val=0.;
         auto main_recon_space = new SIRTReconSpace(
-            n_blocks, 2*trace_metadata.num_cols()*trace_metadata.num_cols());
-        main_recon_space->Initialize(trace_metadata.num_grids());
+            trace_data.metadata().num_slices(), 
+            2*trace_data.metadata().num_cols()*trace_data.metadata().num_cols());
+        main_recon_space->Initialize(trace_data.metadata().num_grids());
         main_recon_space->reduction_objects().ResetAllItems(recon_space_init_val);
 
         /* Prepare processing engine and main reduction space for other threads */
         auto engine =
           new DISPEngineReduction<SIRTReconSpace, float>(
-              comm,
+              &comm,
               main_recon_space,
               thread_count);
               /// thread_count=0 for automatically assign the number of threads
-
-        algs.insert({ recon_alg, main_recon_space });
-        algs.insert({ "engine", engine });
       }
-      else if(reconAlg=="mlem"){
+      else if(recon_alg=="mlem"){
         std::cerr << "Algorithm is not ready: " << recon_alg << std::endl;
         exit(0);
       }
-      else if(reconAlg=="pml"){
+      else if(recon_alg=="pml"){
         std::cerr << "Algorithm is not ready: " << recon_alg << std::endl;
         exit(0);
       }
-      else if(reconAlg=="apmlr"){
+      else if(recon_alg=="apmlr"){
         std::cerr << "Algorithm is not ready: " << recon_alg << std::endl;
         exit(0);
       }

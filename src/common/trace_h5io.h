@@ -1,6 +1,7 @@
 #ifndef DISP_APPS_RECONSTRUCTION_COMMON_H5IO_H
 #define DISP_APPS_RECONSTRUCTION_COMMON_H5IO_H 
 
+#include "mpi.h"
 #include "hdf5.h"
 #include "trace_data.h"
 
