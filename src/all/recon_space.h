@@ -1,72 +1,79 @@
-#include "recon_space.h"
+#ifndef TRACE_RECON_SPACE_H
+#define TRACE_RECON_SPACE_H 
 
-class SIRTReconSpace final : public AReconSpace {
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <stdbool.h>
+#include <chrono>
+#include "hdf5.h"
+#include "string.h"
+#include "trace_data.h"
+#include "trace_utils.h"
+#include "reduction_space_a.h"
+#include "data_region_base.h"
+
+class AReconSpace : 
+  public AReductionSpaceBase<AReconSpace, float>
+{
   protected:
-    float *leng2 = nullptr;
+    float *coordx = nullptr;
+    float *coordy = nullptr;
+    float *ax = nullptr;
+    float *ay = nullptr;
+    float *bx = nullptr;
+    float *by = nullptr;
+    float *coorx = nullptr;
+    float *coory = nullptr;
+    float *leng = nullptr;
+    int *indi = nullptr;
 
-  public:
-    SIRTReconSpace(int rows, int cols) : 
-      AReconSpace(rows, cols) {};
+    int num_grids;
 
-    void Initialize(int n_grids)
+    // Forward projection
+    virtual float CalculateSimdata(
+        float *recon,
+        int len,
+        int *indi,
+        float *leng) 
     {
-      AReconSpace::Initialize(n_grids); 
-      leng2= new float[2*num_grids];
-    }
-
-    void Finalize()
-    {
-      AReconSpace::Finalize();
-      delete [] leng2;
-    }
-
-    // Backprojection
-    void UpdateRecon(
-        ADataRegion<float> &recon,                  // Reconstruction object
-        DataRegion2DBareBase<float> &comb_replica) {// Locally combined replica
-      size_t rows = comb_replica.rows();
-      size_t cols = comb_replica.cols()/2;
-      for(size_t i=0; i<rows; ++i){
-        auto replica = comb_replica[i];
-        for(size_t j=0; j<cols; ++j)
-          recon[i*cols + j] +=
-            replica[j*2] / replica[j*2+1];
+      float simdata = 0.;
+      for(int i=0; i<len-1; ++i){
+        #ifdef PREFETCHON
+        size_t index = indi[i+32];
+        __builtin_prefetch(&(recon[index]),1,0);
+        #endif
+        simdata += recon[indi[i]]*leng[i];
       }
+      return simdata;
     }
 
-
-    void UpdateReconReplica(
+    virtual void UpdateReconReplica(
         float simdata,
         float ray,
         int curr_slice,
         int const * const indi,
         float *leng2,
         float *leng, 
-        int len)
-    {
-      float upd=0., a2=0.;
+        int len) {};
 
-      auto &slice_t = reduction_objects()[curr_slice];
-      auto slice = &slice_t[0];
+    virtual void UpdateReconReplica(
+        float simdata,
+        float ray,
+        int curr_slice,
+        int const * const indi,
+        float *leng, 
+        int len) {};
 
-      for (int i=0; i<len-1; ++i)
-        a2 += leng2[i];
+  public:
+    AReconSpace(int rows, int cols) : 
+      AReductionSpaceBase<AReconSpace, float>(rows, cols) {}
 
-      upd = (ray-simdata) / a2;
+    virtual ~AReconSpace(){
+      Finalize();
+    };
 
-      int i=0;
-      for (; i<(len-1); ++i) {
-    #ifdef PREFETCHON
-        size_t index2 = indi[i+32]*2;
-        __builtin_prefetch(slice+index2,1,0);
-    #endif
-        size_t index = indi[i]*2;
-        slice[index] += leng[i]*upd; 
-        slice[index+1] += leng[i];
-      }
-    }
-
-    void Reduce(MirroredRegionBareBase<float> &input)
+    virtual void Reduce(MirroredRegionBareBase<float> &input)
     {
       auto &rays = *(static_cast<MirroredRegionBase<float, TraceMetadata>*>(&input));
       auto &metadata = rays.metadata();
@@ -134,7 +141,7 @@ class SIRTReconSpace final : public AReconSpace {
               len, 
               num_grids, 
               coorx, coory, 
-              leng, leng2, 
+              leng,
               indi);
 
           /*******************************************************/
@@ -150,10 +157,49 @@ class SIRTReconSpace final : public AReconSpace {
               rays[curr_col], 
               curr_slice, 
               indi, 
-              leng2, leng,
+              leng,
               len);
           /*******************************************************/
         }
       }
     }
+
+    virtual void UpdateRecon(
+        ADataRegion<float> &recon,                   // Reconstruction object
+        DataRegion2DBareBase<float> &comb_replica){} // Locally combined replica
+
+    virtual void Initialize(int n_grids){
+      num_grids = n_grids; 
+
+      coordx = new float[num_grids+1]; 
+      coordy = new float[num_grids+1];
+      ax = new float[num_grids+1];
+      ay = new float[num_grids+1];
+      bx = new float[num_grids+1];
+      by = new float[num_grids+1];
+      coorx = new float[2*num_grids];
+      coory = new float[2*num_grids];
+      leng = new float[2*num_grids];
+      indi = new int[2*num_grids];
+    }
+
+    virtual void CopyTo(AReconSpace &target){
+      target.Initialize(num_grids);
+    }
+
+    virtual void Finalize(){
+      delete [] coordx;
+      delete [] coordy;
+      delete [] ax;
+      delete [] ay;
+      delete [] bx;
+      delete [] by;
+      delete [] coorx;
+      delete [] coory;
+      delete [] leng;
+      delete [] indi;
+    }
 };
+
+#endif    /// TRACE_RECON_SPACE_H
+

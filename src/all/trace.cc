@@ -4,8 +4,12 @@
 #include "disp_comm_mpi.h"
 #include "disp_engine_reduction.h"
 #include "sirt.h"
+#include "mlem.h"
 
 class TraceRuntimeConfig {
+  private:
+    std::shared_ptr<DISPCommBase<float>> comm_;
+
   public:
     std::string kReconstructionAlg;
 
@@ -27,7 +31,8 @@ class TraceRuntimeConfig {
     float b0=10., b1=1., d0=1., d1=1., regw=1.;
     bool degree_to_radian=false;
 
-    std::shared_ptr<DISPCommBase<float>> comm;
+
+    DISPCommBase<float>& comm() const { return *comm_; };
 
     TraceRuntimeConfig(int argc, char **argv){
       try
@@ -188,8 +193,7 @@ class TraceRuntimeConfig {
       }
 
       /* Initiate middleware's communication layer */
-      comm = std::make_shared<DISPCommMPI<float>>(&argc, &argv);
-
+      comm_ = std::make_shared<DISPCommMPI<float>>(&argc, &argv);
     }
 };
 
@@ -204,7 +208,7 @@ struct TraceData{
     void sinograms(ADataRegion<float> *sinograms__) { sinograms_ = sinograms__; };
 
     ~TraceData(){
-      delete sinograms_;
+      //delete sinograms_;
       delete metadata_;
     }
 };
@@ -223,10 +227,7 @@ class TracePH5IO {
     std::string const &thetaDatasetPath;
 
     float center;
-
     bool const degree_to_radian;
-
-    struct TraceData &trace_data;
 
   public:
     TracePH5IO(
@@ -239,8 +240,7 @@ class TracePH5IO {
       std::string &kThetaFilePath,
       std::string &kThetaDatasetPath,
       float kCenter,
-      bool kdegree_to_radian,
-      struct TraceData &kTraceData):
+      bool kdegree_to_radian):
         comm {kcomm},
         inputFilePath {kInputFilePath},
         outputFilePath {kOutputFilePath},
@@ -250,11 +250,27 @@ class TracePH5IO {
         thetaFilePath {kThetaFilePath},
         thetaDatasetPath {kThetaDatasetPath},
         center {kCenter},
-        degree_to_radian {kdegree_to_radian},
-        trace_data {kTraceData}
+        degree_to_radian {kdegree_to_radian}
     {}
 
-    TraceData& read(){
+    TracePH5IO(TraceRuntimeConfig &config):
+        TracePH5IO(
+          config.comm(),
+          config.kInputFilePath,
+          config.kOutputFilePath,
+          config.kOutputDatasetPath,
+          config.kProjectionFilePath,
+          config.kProjectionDatasetPath,
+          config.kThetaFilePath,
+          config.kThetaDatasetPath,
+          config.center,
+          config.degree_to_radian
+        )
+     {}
+    
+
+    TraceData read(){
+      struct TraceData trace_data;
       /* Read slice data and setup job information */
       #ifdef TIMERON
       std::chrono::duration<double> read_tot(0.);
@@ -305,13 +321,17 @@ class TracePH5IO {
 
       return trace_data;
     }
+
+    void write(){
+
+    }
 };
 
 class TraceEngine {
   private:
+    std::unique_ptr<DISPEngineBase<AReconSpace, float>> engine = nullptr;
+    AReconSpace *main_recon_space = nullptr;
     TraceData &trace_data;
-    int thread_count;
-    int iteration;
 
     float recon_space_init_val;
 
@@ -320,32 +340,40 @@ class TraceEngine {
       std::string recon_alg, 
       TraceData &trace_data,
       DISPCommBase<float> &comm,
-      int thread_count,
-      int iteration
+      int thread_count
     ):
-      trace_data {trace_data},
-      thread_count {thread_count},
-      iteration {iteration}
+      trace_data {trace_data}
     {
       if(recon_alg=="sirt"){
         recon_space_init_val=0.;
-        auto main_recon_space = new SIRTReconSpace(
+        main_recon_space= new SIRTReconSpace(
             trace_data.metadata().num_slices(), 
             2*trace_data.metadata().num_cols()*trace_data.metadata().num_cols());
         main_recon_space->Initialize(trace_data.metadata().num_grids());
         main_recon_space->reduction_objects().ResetAllItems(recon_space_init_val);
 
         /* Prepare processing engine and main reduction space for other threads */
-        auto engine =
-          new DISPEngineReduction<SIRTReconSpace, float>(
+        engine.reset(
+          new DISPEngineReduction<AReconSpace, float>(
               &comm,
               main_recon_space,
-              thread_count);
-              /// thread_count=0 for automatically assign the number of threads
+              thread_count));
       }
       else if(recon_alg=="mlem"){
-        std::cerr << "Algorithm is not ready: " << recon_alg << std::endl;
-        exit(0);
+        trace_data.metadata().InitRecon(1.);
+        recon_space_init_val=0.;
+        main_recon_space= new MLEMReconSpace(
+            trace_data.metadata().num_slices(), 
+            2*trace_data.metadata().num_cols()*trace_data.metadata().num_cols());
+        main_recon_space->Initialize(trace_data.metadata().num_grids());
+        main_recon_space->reduction_objects().ResetAllItems(recon_space_init_val);
+
+        /* Prepare processing engine and main reduction space for other threads */
+        engine.reset(
+          new DISPEngineReduction<AReconSpace, float>(
+              &comm,
+              main_recon_space,
+              thread_count));
       }
       else if(recon_alg=="pml"){
         std::cerr << "Algorithm is not ready: " << recon_alg << std::endl;
@@ -361,7 +389,55 @@ class TraceEngine {
       }
     }
 
-    void process(TraceData &trace_data, int thread_count, int iteration){
+    TraceEngine(TraceRuntimeConfig &config, TraceData &trace_data):
+      TraceEngine(
+        config.kReconstructionAlg, 
+        trace_data, 
+        config.comm(),
+        config.thread_count)
+    {};
+
+    void IterativeReconstruct(TraceData &trace_data, int iteration){
+      /**************************/
+      /* Perform reconstruction */
+      /* Define job size per thread request */
+      int64_t req_number = trace_data.metadata().num_cols();
+      float init_val = 0.;
+
+      auto &main_recon_replica = main_recon_space->reduction_objects();
+
+      #ifdef TIMERON
+      std::chrono::duration<double> recon_tot(0.), inplace_tot(0.), update_tot(0.);
+      #endif
+      for(int i=0; i<iteration; ++i){
+        std::cout << "Iteration: " << i << std::endl;
+        #ifdef TIMERON
+        auto recon_beg = std::chrono::system_clock::now();
+        #endif
+        engine->RunParallelReduction(trace_data.sinograms(), req_number);  /// Reconstruction
+        #ifdef TIMERON
+        recon_tot += (std::chrono::system_clock::now()-recon_beg);
+        auto inplace_beg = std::chrono::system_clock::now();
+        #endif
+        engine->ParInPlaceLocalSynchWrapper();              /// Local combination
+        #ifdef TIMERON
+        inplace_tot += (std::chrono::system_clock::now()-inplace_beg);
+
+        /// Update reconstruction object
+        auto update_beg = std::chrono::system_clock::now();
+        #endif
+        main_recon_space->UpdateRecon(trace_data.metadata().recon(), main_recon_replica);
+        #ifdef TIMERON
+        update_tot += (std::chrono::system_clock::now()-update_beg);
+        #endif
+        
+        /// Reset iteration
+        engine->ResetReductionSpaces(init_val);
+        trace_data.sinograms().ResetMirroredRegionIter();
+      }
+    }
+
+    void write(){
 
     }
 
@@ -370,21 +446,15 @@ class TraceEngine {
 int main(int argc, char **argv)
 {
   TraceRuntimeConfig config(argc, argv);
+  TracePH5IO trace_io(config);
 
-  //TracePH5IO trace_io(
-  //      config.comm, 
-  //      config.kProjectionFilePath, config.kProjectionDatasetPath,
-  //      config.kThetaFilePath, config.kThetaDatasetPath,
-  //      config.kOutputFilePath, config.kOutputDatasetPath,
-  //      config.degree_to_radian);
+  struct TraceData trace_data = trace_io.read();
 
-  //TraceData &trace_data = trace_io.read();
+  TraceEngine trace_engine(config, trace_data);
 
-  //TraceEngine trace_engine(config.kReconstructionAlg, trace_data.metadata());
-  //engine.process(
-  //  trace_data, 
-  //  config.thread_count, config.iteration);
+  trace_engine.IterativeReconstruct(
+    trace_data, config.iteration_count);
 
-  //trace_io.write(recon_engine.image());
+  //trace_io.write(trace_engine.image(), trace_data.metadata());
 }
 
