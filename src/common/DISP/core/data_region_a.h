@@ -279,6 +279,7 @@ ADataRegion<T>::ADataRegion (ADataRegion<T> &&region)
   , index_{0}
 {
   *this = std::move(region);
+  std::cout << "ADataRegion:count=" << count_ << std::endl;
 }
 
 template <typename T>

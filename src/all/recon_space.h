@@ -48,6 +48,7 @@ class AReconSpace :
       return simdata;
     }
 
+    /// SIRT
     virtual void UpdateReconReplica(
         float simdata,
         float ray,
@@ -57,9 +58,20 @@ class AReconSpace :
         float *leng, 
         int len) {};
 
+    /// MLEM
     virtual void UpdateReconReplica(
         float simdata,
         float ray,
+        int curr_slice,
+        int const * const indi,
+        float *leng, 
+        int len) {};
+
+    /// PML
+    virtual void UpdateReconReplica(
+        float simdata,
+        float ray,
+        float *recon,
         int curr_slice,
         int const * const indi,
         float *leng, 

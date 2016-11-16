@@ -5,6 +5,7 @@
 #include "disp_engine_reduction.h"
 #include "sirt.h"
 #include "mlem.h"
+#include "pml.h"
 
 class TraceRuntimeConfig {
   private:
@@ -208,7 +209,7 @@ struct TraceData{
     void sinograms(ADataRegion<float> *sinograms__) { sinograms_ = sinograms__; };
 
     ~TraceData(){
-      //delete sinograms_;
+      delete sinograms_;
       delete metadata_;
     }
 };
@@ -269,7 +270,7 @@ class TracePH5IO {
      {}
     
 
-    TraceData read(){
+    TraceData Read(){
       struct TraceData trace_data;
       /* Read slice data and setup job information */
       #ifdef TIMERON
@@ -322,35 +323,38 @@ class TracePH5IO {
       return trace_data;
     }
 
-    void write(){
+    void Write(){
 
     }
 };
 
 class TraceEngine {
   private:
+
+    TraceData &trace_data;
+    TraceRuntimeConfig &config;
+
     std::unique_ptr<DISPEngineBase<AReconSpace, float>> engine = nullptr;
     AReconSpace *main_recon_space = nullptr;
-    TraceData &trace_data;
-
-    float recon_space_init_val;
 
   public:
     TraceEngine(
-      std::string recon_alg, 
       TraceData &trace_data,
-      DISPCommBase<float> &comm,
-      int thread_count
-    ):
-      trace_data {trace_data}
+      TraceRuntimeConfig &conf
+      ):  trace_data {trace_data},
+          config {conf} 
     {
+      std::string &recon_alg = config.kReconstructionAlg;
+      DISPCommBase<float> &comm = config.comm();
+      int thread_count = config.thread_count;
+
       if(recon_alg=="sirt"){
-        recon_space_init_val=0.;
         main_recon_space= new SIRTReconSpace(
             trace_data.metadata().num_slices(), 
             2*trace_data.metadata().num_cols()*trace_data.metadata().num_cols());
         main_recon_space->Initialize(trace_data.metadata().num_grids());
-        main_recon_space->reduction_objects().ResetAllItems(recon_space_init_val);
+        float init_val=0.;
+        main_recon_space->reduction_objects().ResetAllItems(init_val);
 
         /* Prepare processing engine and main reduction space for other threads */
         engine.reset(
@@ -359,14 +363,15 @@ class TraceEngine {
               main_recon_space,
               thread_count));
       }
+
       else if(recon_alg=="mlem"){
-        trace_data.metadata().InitRecon(1.);
-        recon_space_init_val=0.;
+        trace_data.metadata().InitImage(1.);
         main_recon_space= new MLEMReconSpace(
             trace_data.metadata().num_slices(), 
             2*trace_data.metadata().num_cols()*trace_data.metadata().num_cols());
         main_recon_space->Initialize(trace_data.metadata().num_grids());
-        main_recon_space->reduction_objects().ResetAllItems(recon_space_init_val);
+        float init_val=0.;
+        main_recon_space->reduction_objects().ResetAllItems(init_val);
 
         /* Prepare processing engine and main reduction space for other threads */
         engine.reset(
@@ -375,29 +380,38 @@ class TraceEngine {
               main_recon_space,
               thread_count));
       }
+
       else if(recon_alg=="pml"){
-        std::cerr << "Algorithm is not ready: " << recon_alg << std::endl;
-        exit(0);
+        trace_data.metadata().InitImage(1.);
+        PMLDataRegion sinograms(dynamic_cast<DataRegionBase<float, TraceMetadata>&>(trace_data.sinograms()));
+        trace_data.sinograms(&sinograms);
+        main_recon_space= new PMLReconSpace(
+            trace_data.metadata().num_slices(), 
+            2*trace_data.metadata().num_cols()*trace_data.metadata().num_cols());
+        main_recon_space->Initialize(trace_data.metadata().num_grids());
+        float init_val=0.;
+        main_recon_space->reduction_objects().ResetAllItems(init_val);
+
+        /* Prepare processing engine and main reduction space for other threads */
+        engine.reset(
+          new DISPEngineReduction<AReconSpace, float>(
+              &comm,
+              main_recon_space,
+              thread_count));
       }
+
       else if(recon_alg=="apmlr"){
         std::cerr << "Algorithm is not ready: " << recon_alg << std::endl;
         exit(0);
       }
+
       else{
         std::cerr << "Unknown algorithm: " << recon_alg << std::endl;
         exit(0);
       }
     }
 
-    TraceEngine(TraceRuntimeConfig &config, TraceData &trace_data):
-      TraceEngine(
-        config.kReconstructionAlg, 
-        trace_data, 
-        config.comm(),
-        config.thread_count)
-    {};
-
-    void IterativeReconstruct(TraceData &trace_data, int iteration){
+    void IterativeReconstruction(TraceData &trace_data, int iteration){
       /**************************/
       /* Perform reconstruction */
       /* Define job size per thread request */
@@ -423,6 +437,13 @@ class TraceEngine {
         #ifdef TIMERON
         inplace_tot += (std::chrono::system_clock::now()-inplace_beg);
 
+        /// Penalized 
+        if(config.kReconstructionAlg == "pml"){
+          dynamic_cast<PMLDataRegion&>(trace_data.sinograms()).SetFG(0.);
+          dynamic_cast<PMLReconSpace&>(*main_recon_space).
+              CalculateFG(trace_data.sinograms(), config.b0);
+        }
+
         /// Update reconstruction object
         auto update_beg = std::chrono::system_clock::now();
         #endif
@@ -437,6 +458,10 @@ class TraceEngine {
       }
     }
 
+    void IterativeReconstruction(){
+      IterativeReconstruction(trace_data, config.iteration_count);
+    }
+
     void write(){
 
     }
@@ -448,12 +473,11 @@ int main(int argc, char **argv)
   TraceRuntimeConfig config(argc, argv);
   TracePH5IO trace_io(config);
 
-  struct TraceData trace_data = trace_io.read();
+  struct TraceData trace_data = trace_io.Read();
 
-  TraceEngine trace_engine(config, trace_data);
+  TraceEngine trace_engine(trace_data, config);
 
-  trace_engine.IterativeReconstruct(
-    trace_data, config.iteration_count);
+  trace_engine.IterativeReconstruction();
 
   //trace_io.write(trace_engine.image(), trace_data.metadata());
 }

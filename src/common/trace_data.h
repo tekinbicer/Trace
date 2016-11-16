@@ -90,7 +90,7 @@ class TraceMetadata{
       // Setup recon object
       int num_recon_slices = num_slices_+2*num_neighbor_recon_slices_;
       recon_ = new DataRegionBareBase<float>(num_recon_slices * num_grids_ * num_grids_);
-      InitRecon(recon_init_val);
+      InitImage(recon_init_val);
       
       // Set the center
       center_ = (center_<=0.) ? static_cast<float>(num_cols_)/2.+1. : center_;
@@ -107,7 +107,7 @@ class TraceMetadata{
       }
     }
 
-    void InitRecon(float recon_init_val){
+    void InitImage(float recon_init_val){
       for(size_t i=0; i<(*recon_).count(); ++i) (*recon_)[i] = recon_init_val;
     }
 

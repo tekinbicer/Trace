@@ -54,16 +54,16 @@ class DataRegionBase : public ADataRegion<T> {
       : ADataRegion<T>(region)
     {
       DataRegionBase<T, I> *dr = dynamic_cast<DataRegionBase<T, I>*>(&region);
-      if(dr != nullptr) metadata_ = region.metadata_;
+      if(dr != nullptr) metadata_ = dr->metadata_;
     }
 
-    DataRegionBase(const ADataRegion<T> &&region)
+    DataRegionBase(ADataRegion<T> &&region)
       : ADataRegion<T>(std::move(region))
     {
       DataRegionBase<T, I> *dr = dynamic_cast<DataRegionBase<T, I>*>(&region);
       if(dr != nullptr){
-        metadata_ = region.metadata_;
-        region.metadata_ = nullptr;
+        metadata_ = dr->metadata_;
+        dr->metadata_ = nullptr;
       }
       ADataRegion<T>::operator=(std::move(region));
     }
@@ -72,7 +72,7 @@ class DataRegionBase : public ADataRegion<T> {
     DataRegionBase<T, I>& operator=(const ADataRegion<T> &region)
     {
       DataRegionBase<T, I> *dr = dynamic_cast<DataRegionBase<T, I>*>(&region);
-      if(dr != nullptr) metadata_ = region.metadata_;
+      if(dr != nullptr) metadata_ = dr->metadata_;
       ADataRegion<T>::operator=(region);
 
       return *this;
@@ -81,8 +81,8 @@ class DataRegionBase : public ADataRegion<T> {
     {
       DataRegionBase<T, I> *dr = dynamic_cast<DataRegionBase<T, I>*>(&region);
       if(dr != nullptr){
-        metadata_ = region.metadata_;
-        region.metadata_ = nullptr;
+        metadata_ = dr->metadata_;
+        dr->metadata_ = nullptr;
       }
       ADataRegion<T>::operator=(std::move(region));
 

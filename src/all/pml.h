@@ -4,7 +4,7 @@
 #include "reduction_space_a.h"
 #include "data_region_base.h"
 
-class PMLDataRegion : public DataRegionBase<float, TraceMetadata>{
+class PMLDataRegion final : public DataRegionBase<float, TraceMetadata>{
   private:
     float *F_ = nullptr;
     float *G_ = nullptr;
@@ -32,6 +32,10 @@ class PMLDataRegion : public DataRegionBase<float, TraceMetadata>{
       SetFG(0.);
     }
 
+    PMLDataRegion(DataRegionBase<float, TraceMetadata> &region) :
+      PMLDataRegion(&region[0], region.count(), &region.metadata())
+    { }
+
     virtual ~PMLDataRegion(){
       delete [] F_;
       delete [] G_;
@@ -58,9 +62,10 @@ class PMLReconSpace final : public AReconSpace
       AReconSpace(rows, cols) {};
 
     void UpdateRecon(
-        PMLDataRegion &slices,                      // Input slices, metadata, recon
+        ADataRegion<float> &slices_,                      // Input slices, metadata, recon
         DataRegion2DBareBase<float> &comb_replica)  // Locally combined replica
     {
+      PMLDataRegion &slices = dynamic_cast<PMLDataRegion&>(slices_);
       auto &recon = slices.metadata().recon();
       size_t rows = comb_replica.rows();
       size_t cols = comb_replica.cols()/2;
@@ -80,9 +85,10 @@ class PMLReconSpace final : public AReconSpace
     }
 
     void CalculateFG(
-        PMLDataRegion &slices,
+        ADataRegion<float> &slices_,
         float beta)
     {
+      PMLDataRegion &slices = dynamic_cast<PMLDataRegion&>(slices_); 
       int num_slices = slices.metadata().num_slices();
       int num_grids = slices.metadata().num_grids();
 
