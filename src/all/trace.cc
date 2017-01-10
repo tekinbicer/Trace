@@ -218,7 +218,6 @@ class TracePH5IO {
   private:
     DISPCommBase<float> const &comm;
 
-    std::string const &inputFilePath;
     std::string const &outputFilePath;
     std::string const &outputDatasetPath;
 
@@ -233,7 +232,6 @@ class TracePH5IO {
   public:
     TracePH5IO(
       DISPCommBase<float> &kcomm,
-      std::string &kInputFilePath,
       std::string &kOutputFilePath,
       std::string &kOutputDatasetPath,
       std::string &kProjectionFilePath,
@@ -243,7 +241,6 @@ class TracePH5IO {
       float kCenter,
       bool kdegree_to_radian):
         comm {kcomm},
-        inputFilePath {kInputFilePath},
         outputFilePath {kOutputFilePath},
         outputDatasetPath {kOutputDatasetPath},
         projectionFilePath {kProjectionFilePath},
@@ -257,7 +254,6 @@ class TracePH5IO {
     TracePH5IO(TraceRuntimeConfig &config):
         TracePH5IO(
           config.comm(),
-          config.kInputFilePath,
           config.kOutputFilePath,
           config.kOutputDatasetPath,
           config.kProjectionFilePath,
@@ -271,7 +267,7 @@ class TracePH5IO {
     
 
     TraceData Read(){
-      struct TraceData trace_data;
+      TraceData trace_data;
       /* Read slice data and setup job information */
       #ifdef TIMERON
       std::chrono::duration<double> read_tot(0.);
@@ -324,7 +320,18 @@ class TracePH5IO {
     }
 
     void Write(){
-
+      /* Write reconstructed data to disk */
+#ifdef TIMERON
+      std::chrono::duration<double> write_tot(0.);
+      auto write_beg = std::chrono::system_clock::now();
+#endif
+      trace_io::WriteRecon(
+          trace_metadata, *d_metadata,
+          config.kReconOutputPath,
+          config.kReconDatasetPath);
+#ifdef TIMERON
+      write_tot += (std::chrono::system_clock::now()-write_beg);
+#endif
     }
 };
 
@@ -409,6 +416,8 @@ class TraceEngine {
         std::cerr << "Unknown algorithm: " << recon_alg << std::endl;
         exit(0);
       }
+
+
     }
 
     void IterativeReconstruction(TraceData &trace_data, int iteration){
@@ -462,10 +471,7 @@ class TraceEngine {
       IterativeReconstruction(trace_data, config.iteration_count);
     }
 
-    void write(){
-
-    }
-
+    Image() const { return main_recon_space->;}
 };
 
 int main(int argc, char **argv)
@@ -473,12 +479,12 @@ int main(int argc, char **argv)
   TraceRuntimeConfig config(argc, argv);
   TracePH5IO trace_io(config);
 
-  struct TraceData trace_data = trace_io.Read();
+  TraceData trace_data = trace_io.Read();
 
   TraceEngine trace_engine(trace_data, config);
 
   trace_engine.IterativeReconstruction();
 
-  //trace_io.write(trace_engine.image(), trace_data.metadata());
+  trace_io.Write(trace_engine.image(), trace_data);
 }
 

@@ -20,7 +20,7 @@ HDF5LIB = ${HDF5_HOME}/lib
 MPIINC = ${MPI_HOME}/include
 MPILIB = ${MPI_HOME}/lib
 
-LIBS = -lz -lm -lmpi -lhdf5 -lpthread
+LIBS = -lz -lm -lmpich -lhdf5 -lpthread
 LIBDIRS = -L$(HDF5LIB)
 INCLUDES = -I$(DISPDIR) -I$(COMMONDIR) -I$(HDF5INC) -I$(MPIINC)
 

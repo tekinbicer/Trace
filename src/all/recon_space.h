@@ -50,32 +50,32 @@ class AReconSpace :
 
     /// SIRT
     virtual void UpdateReconReplica(
-        float simdata,
-        float ray,
-        int curr_slice,
-        int const * const indi,
-        float *leng2,
-        float *leng, 
-        int len) {};
+        float /* simdata */,
+        float /* ray */,
+        int /* curr_slice */,
+        int const * const /* indi */,
+        float * /* leng2 */,
+        float * /* leng */, 
+        int /* len */) {};
 
     /// MLEM
     virtual void UpdateReconReplica(
-        float simdata,
-        float ray,
-        int curr_slice,
-        int const * const indi,
-        float *leng, 
-        int len) {};
+        float /* simdata */,
+        float /* ray */,
+        int /* curr_slice */,
+        int const * const /* indi */,
+        float * /* leng */, 
+        int /* len */) {};
 
     /// PML
     virtual void UpdateReconReplica(
-        float simdata,
-        float ray,
-        float *recon,
-        int curr_slice,
-        int const * const indi,
-        float *leng, 
-        int len) {};
+        float /* simdata */,
+        float /* ray */,
+        float * /* recon */,
+        int /* curr_slice */,
+        int const * const /* indi */,
+        float * /* leng */, 
+        int /* len */) {};
 
   public:
     AReconSpace(int rows, int cols) : 
@@ -177,8 +177,8 @@ class AReconSpace :
     }
 
     virtual void UpdateRecon(
-        ADataRegion<float> &recon,                   // Reconstruction object
-        DataRegion2DBareBase<float> &comb_replica){} // Locally combined replica
+        ADataRegion<float> & /* recon */,                   // Reconstruction object
+        DataRegion2DBareBase<float> & /*comb_replica */){} // Locally combined replica
 
     virtual void Initialize(int n_grids){
       num_grids = n_grids; 
