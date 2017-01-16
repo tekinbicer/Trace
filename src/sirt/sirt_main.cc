@@ -175,7 +175,7 @@ int main(int argc, char **argv)
   std::chrono::duration<double> recon_tot(0.), inplace_tot(0.), update_tot(0.);
   #endif
   for(int i=0; i<config.iteration; ++i){
-    std::cout << "Iteration: " << i << std::endl;
+    /// std::cout << "Iteration: " << i << std::endl;
     #ifdef TIMERON
     auto recon_beg = std::chrono::system_clock::now();
     #endif
@@ -194,6 +194,13 @@ int main(int argc, char **argv)
     main_recon_space->UpdateRecon(trace_metadata.recon(), main_recon_replica);
     #ifdef TIMERON
     update_tot += (std::chrono::system_clock::now()-update_beg);
+
+    if(comm->rank()==0){
+      std::cout << "Reconstruction time=" << recon_tot.count() <<
+      std::cout << "; Local combination time=" << inplace_tot.count() << 
+      std::cout << "; Update time=" << update_tot.count() <<
+      std::cout << "; Read time=" << read_tot.count() << std::endl;
+    }
     #endif
     
     /// Reset iteration

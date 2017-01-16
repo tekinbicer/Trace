@@ -11,6 +11,7 @@
  */
 
 #include <vector>
+#include <stdexcept>
 #include "data_region_a.h"
 
 template <typename T>

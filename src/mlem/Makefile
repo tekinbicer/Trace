@@ -1,5 +1,5 @@
 # Compiler
-CC = clang++
+CC = c++
 
 # Directories
 ROOTDIR = ../../
@@ -7,21 +7,23 @@ ROOTDIR = ../../
 BINDIR = ${ROOTDIR}/bin/
 
 # Flags
-CFLAGS = -std=c++11 -O3 -Wall -Wextra
-CFLAGS += -g -ffast-math -fPIC -DTIMERON -DPREFETCHON 
+CFLAGS = -O3 -Wall -Wextra -std=c++11 
+CFLAGS += -g -fPIC -DTIMERON
 
 # Common data structures and utilities classes
 COMMONDIR = ${ROOTDIR}/src/common
 # DISP Framework src dir
 DISPDIR = ${COMMONDIR}/DISP/core
 
+HDF5_HOME = ${HDF5_ROOT}
 HDF5LIB = ${HDF5_HOME}/lib
 HDF5INC = ${HDF5_HOME}/include 
 
+MPI_HOME = ${MPICH_DIR}
 MPILIB = ${MPI_HOME}/lib
-MPIINC = ${MPI_HOME}}/include
+MPIINC = ${MPI_HOME}/include
 
-LIBS = -lm -lhdf5 -lz -lmpi 
+LIBS = -lm -lhdf5 -lmpich -ldl
 LIBDIRS = -L$(HDF5LIB) -L$(MPILIB)
 INCLUDES = -I$(DISPDIR) -I${COMMONDIR} -I$(HDF5INC) -I$(MPIINC)
 
@@ -39,8 +41,10 @@ all: $(PROGS)
 # SIRT
 mlem: $(COMMON_OBJS) $(MLEM_OBJS)
 	$(CC) $(CFLAGS) -o $@ $(MLEM_OBJS) $(COMMON_OBJS) $(INCLUDES) $(LIBDIRS) $(LIBS)
+
 mlem_main.o: mlem_main.cc
 	$(CC) $(CFLAGS) -c mlem_main.cc $(INCLUDES)
+
 mlem.o: mlem.cc
 	$(CC) $(CFLAGS) -c mlem.cc $(INCLUDES)
 
