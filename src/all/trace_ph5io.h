@@ -1,6 +1,12 @@
 #ifndef TRACE_COMMON_TRACEPH5IO_H
 #define TRACE_COMMON_TRACEPH5IO_H
 
+#include "trace_runtime_config.h"
+#include "disp_comm_base.h"
+#include "trace_engine_data.h"
+#include "trace_h5io.h"
+#include "trace_data.h"
+
 class TracePH5IO {
   private:
     DISPCommBase<float> const &comm;
@@ -28,7 +34,7 @@ class TracePH5IO {
       float kCenter,
       bool kdegree_to_radian);
 
-    TracePH5IO(TraceRuntimeConfig &config);
+    TracePH5IO(DISPCommBase<float> &kcomm, TraceRuntimeConfig &config);
     
 
     TraceData Read();

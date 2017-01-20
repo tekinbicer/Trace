@@ -1,6 +1,8 @@
 #ifndef TRACE_COMMON_TRACEDATA_H
 #define TRACE_COMMON_TRACEDATA_H
 
+#include "trace_data.h"
+
 struct TraceData{
   public:
     ADataRegion<float> *sinograms_=nullptr;

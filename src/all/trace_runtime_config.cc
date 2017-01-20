@@ -1,4 +1,4 @@
-#include "TraceRuntimeConfig.h"
+#include "trace_runtime_config.h"
 
 TraceRuntimeConfig::TraceRuntimeConfig(int argc, char **argv)
 {
@@ -32,49 +32,49 @@ TraceRuntimeConfig::TraceRuntimeConfig(int argc, char **argv)
     cmd.add(argDeltaZero);
 
     TCLAP::ValueArg<std::string> argProjectionFilePath(
-        "p", "projection-file-path", 
+        "", "projection-file-path", 
         "Input projection file path.", false, "", "string");
     cmd.add(argProjectionFilePath);
     TCLAP::ValueArg<std::string> argProjectionDatasetPath(
-        "d", "projection-dataset-path", "Projection dataset path in HDF5"
+        "", "projection-dataset-path", "Projection dataset path in HDF5"
         "file. Default value is \"/exchange/data\".", 
         false, "/exchange/data", "string");
     cmd.add(argProjectionDatasetPath);
     TCLAP::ValueArg<std::string> argThetaFilePath(
-        "e", "theta-file-path", 
+        "", "theta-file-path", 
         "Input theta file path.", false, "", "string");
     cmd.add(argThetaFilePath);
     TCLAP::ValueArg<std::string> argThetaDatasetPath(
-        "q", "theta-dataset-path", "Theta dataset path in HDF5 file. "
+        "", "theta-dataset-path", "Theta dataset path in HDF5 file. "
         "Default value is \"/exchange/theta\".", 
         false, "/exchange/theta", "string");
     cmd.add(argThetaDatasetPath);
 
     TCLAP::ValueArg<std::string> argOutputDatasetPath(
-        "m", "output-dataset-path", 
+        "", "output-dataset-path", 
         "Reconstructed 3D image dataset path in hdf5 file.",
         false, "/image", "string");
     cmd.add(argOutputDatasetPath);
 
     TCLAP::ValueArg<float> argCenter(
-        "c", "center", "Center value for input dataset.", false, 0., "float");
+        "", "center", "Center value for input dataset.", false, 0., "float");
     cmd.add(argCenter);
     TCLAP::ValueArg<int> argThreadCount(
-        "t", "thread-count", 
+        "", "thread-count", 
         "Number of threads per process. Defaule value is 1", false, 1, "int");
     cmd.add(argThreadCount);
     TCLAP::ValueArg<int> argIterationCount(
-        "i", "iteration-count", "Number of iterations.", true, 0, "int");
+        "", "iteration-count", "Number of iterations.", true, 0, "int");
     cmd.add(argIterationCount);
 
     TCLAP::ValueArg<std::string> argOutputFilePath(
-        "o", "output-file-path", 
+        "", "output-file-path", 
         "Output HDF5 file path. The reconstructed 3D image is stored "
         "in \"/image\" dataset. Default file is ./output.h5.", 
         false, "./output.h5", "string");
     cmd.add(argOutputFilePath);
     TCLAP::ValueArg<std::string> argInputFilePath(
-        "f", "input-file-path", 
+        "", "input-file-path", 
         "Input HDF5 file path. This file should include both projection "
         "and theta datasets.", 
         false, "", "string");
@@ -83,7 +83,7 @@ TraceRuntimeConfig::TraceRuntimeConfig(int argc, char **argv)
     std::vector<std::string> allowedAlgs{"sirt", "mlem", "pml", "apmlr"};
     TCLAP::ValuesConstraint<std::string> allowedVals(allowedAlgs);
     TCLAP::ValueArg<std::string> argReconstructionAlg(
-        "r", "reconstruction-algorithm", 
+        "", "reconstruction-algorithm", 
         "Reconstruction algorithm to be applied.", 
         true, "", &allowedVals);
     cmd.add(argReconstructionAlg);

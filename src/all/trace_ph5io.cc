@@ -1,4 +1,7 @@
-#include "TracePH5IO.h"
+#include "trace_ph5io.h"
+#include "trace_utils.h"
+#include "data_region_bare_base.h"
+#include "data_region_base.h"
 
 TracePH5IO::TracePH5IO(
     DISPCommBase<float> &kcomm,
@@ -22,9 +25,11 @@ TracePH5IO::TracePH5IO(
 {}
 
 
-TracePH5IO::TracePH5IO(TraceRuntimeConfig &config)
+TracePH5IO::TracePH5IO(
+  DISPCommBase<float> &kcomm,
+  TraceRuntimeConfig &config)
     : TracePH5IO(
-        config.comm(),
+        kcomm,
         config.kOutputFilePath,
         config.kOutputDatasetPath,
         config.kProjectionFilePath,
@@ -89,18 +94,3 @@ TraceData TracePH5IO::Read(){
   return trace_data;
 }
 
-
-void TracePH5IO::Write(){
-  /* Write reconstructed data to disk */
-#ifdef TIMERON
-  std::chrono::duration<double> write_tot(0.);
-  auto write_beg = std::chrono::system_clock::now();
-#endif
-  trace_io::WriteRecon(
-      trace_metadata, *d_metadata,
-      config.kReconOutputPath,
-      config.kReconDatasetPath);
-#ifdef TIMERON
-  write_tot += (std::chrono::system_clock::now()-write_beg);
-#endif
-}

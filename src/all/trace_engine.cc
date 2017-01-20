@@ -1,11 +1,15 @@
-#include "TraceEngine.h"
+#include "trace_engine.h"
+#include "recon_space.h"
+#include "sirt.h"
+#include "pml.h"
+#include "mlem.h"
 
-TraceEngine::TraceEngine(TraceData &trace_data, TraceRuntimeConfig &conf)
+TraceEngine::TraceEngine(TraceData &trace_data, DISPCommBase<float> &dcomm, TraceRuntimeConfig &conf)
   : trace_data {trace_data},
+    comm {dcomm},
     config {conf}
 {
   std::string &recon_alg = config.kReconstructionAlg;
-  DISPCommBase<float> &comm = config.comm();
   int thread_count = config.thread_count;
 
   if(recon_alg=="sirt"){

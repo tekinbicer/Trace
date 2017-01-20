@@ -1,6 +1,8 @@
 #ifndef TRACE_COMMON_TRACERUNTIMECONFIG_H
 #define TRACE_COMMON_TRACERUNTIMECONFIG_H
 
+#include "tclap/CmdLine.h"
+
 class TraceRuntimeConfig {
   private:
 
@@ -24,9 +26,6 @@ class TraceRuntimeConfig {
     /// Setup these according to application
     float b0=10., b1=1., d0=1., d1=1., regw=1.;
     bool degree_to_radian=false;
-
-
-    DISPCommBase<float>& comm();
 
     TraceRuntimeConfig(int argc, char **argv);
 };
