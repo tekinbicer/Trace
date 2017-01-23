@@ -28,6 +28,13 @@ class PMLDataRegion : public DataRegionBase<float, TraceMetadata>{
     const float kWeightCorners[3] {
       0.36939806251, 0.36939806251, 0.26120387496 };
 
+    PMLDataRegion(DataRegionBase<float, TraceMetadata> *data_region):
+      PMLDataRegion(
+        &((*data_region)[0]), 
+        data_region->count(), 
+        &data_region->metadata()
+      ) {}
+
     PMLDataRegion(
         float *data, 
         size_t count, 
@@ -105,7 +112,9 @@ class PMLReconSpace :
     }
 
     void UpdateRecon(
-        PMLDataRegion &slices, // Reconstruction object
+        //PMLDataRegion &slices, // Reconstruction object
+        ADataRegion<float> &recon,                  // Reconstruction object
+        float *F, float *G,
         DataRegion2DBareBase<float> &comb_replica); // Locally combined replica
 
     void CalculateFG(

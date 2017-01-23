@@ -1,3 +1,4 @@
+#include <iomanip>
 #include "mpi.h"
 #include "trace_h5io.h"
 #include "tclap/CmdLine.h"
@@ -5,6 +6,7 @@
 #include "data_region_base.h"
 #include "disp_engine_reduction.h"
 #include "mlem.h"
+#include "ordered_subset.h"
 
 class TraceRuntimeConfig {
   public:
@@ -112,33 +114,50 @@ int main(int argc, char **argv)
   auto theta = trace_io::ReadTheta(t_metadata);
   /* Convert degree values to radian */
   trace_utils::DegreeToRadian(*theta);
-  trace_utils::Absolute(
+  size_t ray_count = 
+    input_slice->metadata->dims[0]*input_slice->count*input_slice->metadata->dims[2]; 
+  trace_utils::RemoveNegatives(
       static_cast<float *>(input_slice->data),
-      input_slice->count);
+      ray_count);
+  trace_utils::RemoveAbnormals(
+      static_cast<float *>(input_slice->data),
+      ray_count);
 
-  /* Setup metadata data structure */
-  // INFO: TraceMetadata destructor frees theta->data!
-  // TraceMetadata internally creates reconstruction object
-  TraceMetadata trace_metadata(
-      static_cast<float *>(theta->data),  /// float const *theta,
-      0,                                  /// int const proj_id,
-      beg_index,                          /// int const slice_id,
-      0,                                  /// int const col_id,
-      input_slice->metadata->dims[1],     /// int const num_tot_slices,
-      input_slice->metadata->dims[0],     /// int const num_projs,
-      n_blocks,                           /// int const num_slices,
-      input_slice->metadata->dims[2],     /// int const num_cols,
-      input_slice->metadata->dims[2],     /// int const num_grids,
-      config.center,                      /// float const center,
-      0,                                  /// int const num_neighbor_recon_slices,
-      1.);                                /// float const recon_init_val
+  int ddims[3];
+  for(int i=0; i<3; ++i) {
+    ddims[i] = input_slice->metadata->dims[i];
+    std::cout << "Dim[" << i <<"]=" << ddims[i] << std::endl;
+  }
+  DataSubset data_subset(
+    static_cast<float*>(input_slice->data), 
+    static_cast<float*>(theta->data), 
+    ddims,
+    n_blocks, beg_index,
+    100, config.center, 0, 1., SubsetType::Ordered);            /// Number of subsets
 
-  // INFO: DataRegionBase destructor deletes input_slice.data pointer
-  ADataRegion<float> *slices = 
-    new DataRegionBase<float, TraceMetadata>(
-        static_cast<float *>(input_slice->data),
-        trace_metadata.count(),
-        &trace_metadata);
+  ///* Setup metadata data structure */
+  //// INFO: TraceMetadata destructor frees theta->data!
+  //// TraceMetadata internally creates reconstruction object
+  //TraceMetadata trace_metadata(
+  //    static_cast<float *>(theta->data),  /// float const *theta,
+  //    0,                                  /// int const proj_id,
+  //    beg_index,                          /// int const slice_id,
+  //    0,                                  /// int const col_id,
+  //    input_slice->metadata->dims[1],     /// int const num_tot_slices,
+  //    input_slice->metadata->dims[0],     /// int const num_projs,
+  //    n_blocks,                           /// int const num_slices,
+  //    input_slice->metadata->dims[2],     /// int const num_cols,
+  //    input_slice->metadata->dims[2],     /// int const num_grids,
+  //    config.center,                      /// float const center,
+  //    0,                                  /// int const num_neighbor_recon_slices,
+  //    1.);                                /// float const recon_init_val
+
+  //// INFO: DataRegionBase destructor deletes input_slice.data pointer
+  //ADataRegion<float> *slices = 
+  //  new DataRegionBase<float, TraceMetadata>(
+  //      static_cast<float *>(input_slice->data),
+  //      trace_metadata.count(),
+  //      &trace_metadata);
 
   /***********************/
   /* Initiate middleware */
@@ -146,10 +165,14 @@ int main(int argc, char **argv)
   /* The size of the reconstruction object (in reconstruction space) is
    * twice the reconstruction object size, because of the length storage
    */
-  auto main_recon_space = new MLEMReconSpace(
-      n_blocks, 
-      2*trace_metadata.num_cols()*trace_metadata.num_cols());
-  main_recon_space->Initialize(trace_metadata.num_grids());
+  int ncols = input_slice->metadata->dims[2]; 
+  int nprojs = input_slice->metadata->dims[0];
+  int nsinogs = n_blocks;
+  int ntotsinogs = input_slice->metadata->dims[1];
+  int beg_sinog_id = beg_index;
+
+  auto main_recon_space = new MLEMReconSpace(nsinogs, 2*ncols*ncols);
+  main_recon_space->Initialize(ncols*ncols);
   auto &main_recon_replica = main_recon_space->reduction_objects();
   float init_val=0.;
   main_recon_replica.ResetAllItems(init_val);
@@ -157,45 +180,73 @@ int main(int argc, char **argv)
   /* Prepare processing engine and main reduction space for other threads */
   DISPEngineBase<MLEMReconSpace, float> *engine =
     new DISPEngineReduction<MLEMReconSpace, float>(
-        comm,
-        main_recon_space,
-        config.thread_count); 
-          /// # threads (0 for auto assign the number of threads)
+        comm, main_recon_space, config.thread_count); 
   /**********************/
 
   /**************************/
   /* Perform reconstruction */
   /* Define job size per thread request */
-  int64_t req_number = trace_metadata.num_cols();
+  int64_t req_number = ncols;
 
+  DataRegionBase<float, TraceMetadata> *slices = nullptr;
   for(int i=0; i<config.iteration; ++i){
     std::cout << "Iteration: " << i << std::endl;
-    engine->RunParallelReduction(*slices, req_number);  /// Reconstruction
-    engine->ParInPlaceLocalSynchWrapper();              /// Local combination
-    
-    /// Update reconstruction object
-    main_recon_space->UpdateRecon(trace_metadata.recon(), main_recon_replica);
 
-    // Reset iteration
-    engine->ResetReductionSpaces(init_val);
-    slices->ResetMirroredRegionIter();
+    for(int j=0; j<data_subset.NSubsets(); ++j){
+      std::cout << "Subset: " << j << "/" << data_subset.NSubsets() << std::endl;
+      slices = data_subset.DataRegionSubset(j);
+      std::cout << "Data region was read" << std::endl;
+      engine->RunParallelReduction(*slices, req_number);  /// Reconstruction
+      std::cout << "Parallel reconstruction was done" << std::endl;
+      engine->ParInPlaceLocalSynchWrapper();              /// Local combination
+      std::cout << "Inplace local synch was done" << std::endl;
+      
+      /// Update reconstruction object
+      main_recon_space->UpdateRecon(slices->metadata().recon(), main_recon_replica);
+      std::cout << "Recon space was updated" << std::endl;
+
+      /* Periodically write to disk */
+      std::stringstream iteration_stream;
+      iteration_stream << std::setfill('0') << std::setw(6) << i << j;
+      std::string outputpath = iteration_stream.str() + "-recon.h5";
+      trace_io::WriteRecon(
+          slices->metadata(), *d_metadata,
+          outputpath,
+          config.kReconDatasetPath);
+      /******************************/
+      std::cout << "Image was written" << std::endl;
+
+      // Reset iteration
+      engine->ResetReductionSpaces(init_val);
+      std::cout << "Reduction space was cleaned" << std::endl;
+      // slices->ResetMirroredRegionIter();
+    }
   }
   /**************************/
 
   /* Write reconstructed data to disk */
   trace_io::WriteRecon(
-      trace_metadata, *d_metadata, 
+      slices->metadata(), *d_metadata, 
       config.kReconOutputPath, 
       config.kReconDatasetPath);
 
   /* Clean-up the resources */
+  std::cout << "1" << std::endl;
   delete d_metadata->dims;
+  std::cout << "2" << std::endl;
   delete d_metadata;
+  std::cout << "3" << std::endl;
   delete slices;
+  std::cout << "4" << std::endl;
   delete t_metadata->dims;
+  std::cout << "5" << std::endl;
   delete t_metadata;
+  std::cout << "6" << std::endl;
   delete theta;
+  std::cout << "7" << std::endl;
   delete engine;
+  std::cout << "8" << std::endl;
   delete input_slice;
+  std::cout << "9" << std::endl;
 }
 
