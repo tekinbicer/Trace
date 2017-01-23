@@ -2,6 +2,7 @@
 #include "trace_utils.h"
 #include "data_region_bare_base.h"
 #include "data_region_base.h"
+#include <chrono>
 
 TracePH5IO::TracePH5IO(
     DISPCommBase<float> &kcomm,
