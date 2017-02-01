@@ -1,5 +1,5 @@
 # Compiler
-CC = clang++
+CC = mpiicpc
 
 # Directories
 ROOTDIR = ../../
@@ -7,8 +7,9 @@ ROOTDIR = ../../
 BINDIR = ${ROOTDIR}/bin/
 
 # Flags
-CFLAGS = -std=c++11 -O3 -Wall -Wextra
-CFLAGS += -g -ffast-math -fPIC -DTIMERON -DPREFETCHON
+CFLAGS = -O2 -Wall -Wextra -std=c++11 
+CFLAGS += -g -fPIC -DTIMERON 
+CFLAGS += -no-inline-factor -no-inline-max-size  # didn't help
 
 # Common data structures and utilities classes
 COMMONDIR = ${ROOTDIR}/src/common
@@ -21,9 +22,9 @@ HDF5INC = ${HDF5_HOME}/include
 MPILIB = ${MPI_HOME}/lib
 MPIINC = ${MPI_HOME}/include
 
-LIBS = -lm -lhdf5 -lz -lmpi 
-LIBDIRS = -L$(HDF5LIB) -L$(MPILIB)
-INCLUDES = -I$(DISPDIR) -I${COMMONDIR} -I$(HDF5INC) -I$(MPIINC)
+LIBS = -lm -lhdf5
+LIBDIRS = -L$(HDF5LIB) 
+INCLUDES = -I$(DISPDIR) -I${COMMONDIR} -I$(HDF5INC)
 
 # Executable/reconstruction objects
 APMLR_OBJS = apmlr.o apmlr_main.o

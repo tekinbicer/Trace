@@ -1,33 +1,39 @@
 #include "apmlr.h"
 
 void APMLRReconSpace::UpdateRecon(
-    APMLRDataRegion &slices,                    // Input slices, metadata, recon
+    ADataRegion<float> &recon_region,                  // Reconstruction object
+    int num_neighbor_recon_slices, int num_grids,
+    float *F, float *G,
     DataRegion2DBareBase<float> &comb_replica)  // Locally combined replica
 {
   int slice_count = 
-    slices.metadata().num_neighbor_recon_slices() *
-    slices.metadata().num_grids() * slices.metadata().num_grids();
-  float *recon = &slices.metadata().recon()[slice_count];
+    num_neighbor_recon_slices*num_grids*num_grids;
+    //slices.metadata().num_neighbor_recon_slices() *
+    //slices.metadata().num_grids() * slices.metadata().num_grids();
+  float *recon = &recon_region[slice_count];
   size_t rows = comb_replica.rows();
   size_t cols = comb_replica.cols()/2;
 
-  float *F = slices.F();
-  float *G = slices.G();
-
+  size_t nans=0;
   for(size_t i=0; i<rows; ++i){
     auto replica = comb_replica[i];
     for(size_t j=0; j<cols; ++j){
       size_t index = (i*cols) + j;
-      recon[index] =
-        (-G[index] + sqrt(G[index]*G[index] - 8*replica[j*2]*F[index])) /
+      float upd = 
+        (-G[index] + sqrt(G[index]*G[index] - 8*replica[j*2]*F[index])) / 
           (4*F[index]);
+      if(std::isnan(upd)) {
+        nans++; continue;
+      } 
+      else recon[index] = upd;
     }
   }
+  std::cout << "NaNs=" << nans << std::endl;
 }
 
 void APMLRReconSpace::CalculateFGInner(
-  float * recon, float *F, float *G, 
-  float beta, float beta1, float delta, float delta1, float regw, 
+  float *recon, float *F, float *G, 
+  float beta, float beta1, float delta, float delta1, float regw,
   int num_slices, int num_grids)
 {
   int k, n, m, q;
@@ -70,18 +76,18 @@ void APMLRReconSpace::CalculateFGInner(
 
         for (q = 0; q < 8; q++) {
           mg[q] = recon[ind0]+recon[indg[q]];
-          rg[q] = recon[ind0]-recon[indg[q]];
-          gammag[q] = 1/(1+fabs(rg[q]/delta));
-          F[ind0] += 2*beta*wg[q]*gammag[q];
-          G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+          //rg[q] = recon[ind0]-recon[indg[q]];
+          //gammag[q] = 1/(1+fabs(rg[q]/delta));
+          F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+          G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
         }
 
         for (q = 8; q < 10; q++) {
           mg[q] = recon[ind0]+recon[indg[q]];
-          rg[q] = recon[ind0]-recon[indg[q]];
-          gammag[q] = 1/(1+fabs(rg[q]/delta1));
-          F[ind0] += 2*beta1*wg[q]*gammag[q];
-          G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+          //rg[q] = recon[ind0]-recon[indg[q]];
+          //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+          F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+          G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
         }
       }
     }
@@ -113,18 +119,18 @@ void APMLRReconSpace::CalculateFGInner(
 
       for (q = 0; q < 5; q++) {
         mg[q] = recon[ind0]+recon[indg[q]];
-        rg[q] = recon[ind0]-recon[indg[q]];
-        gammag[q] = 1/(1+fabs(rg[q]/delta));
-        F[ind0] += 2*beta*wg[q]*gammag[q];
-        G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+        //rg[q] = recon[ind0]-recon[indg[q]];
+        //gammag[q] = 1/(1+fabs(rg[q]/delta));
+        F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+        G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
       }
 
       for (q = 5; q < 7; q++) {
         mg[q] = recon[ind0]+recon[indg[q]];
-        rg[q] = recon[ind0]-recon[indg[q]];
-        gammag[q] = 1/(1+fabs(rg[q]/delta1));
-        F[ind0] += 2*beta1*wg[q]*gammag[q];
-        G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+        //rg[q] = recon[ind0]-recon[indg[q]];
+        //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+        F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+        G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
       }
     }
   }
@@ -145,18 +151,18 @@ void APMLRReconSpace::CalculateFGInner(
 
       for (q = 0; q < 5; q++) {
         mg[q] = recon[ind0]+recon[indg[q]];
-        rg[q] = recon[ind0]-recon[indg[q]];
-        gammag[q] = 1/(1+fabs(rg[q]/delta));
-        F[ind0] += 2*beta*wg[q]*gammag[q];
-        G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+        //rg[q] = recon[ind0]-recon[indg[q]];
+        //gammag[q] = 1/(1+fabs(rg[q]/delta));
+        F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+        G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
       }
 
       for (q = 5; q < 7; q++) {
         mg[q] = recon[ind0]+recon[indg[q]];
-        rg[q] = recon[ind0]-recon[indg[q]];
-        gammag[q] = 1/(1+fabs(rg[q]/delta1));
-        F[ind0] += 2*beta1*wg[q]*gammag[q];
-        G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+        //rg[q] = recon[ind0]-recon[indg[q]];
+        //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+        F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+        G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
       }
     }
   }
@@ -177,18 +183,18 @@ void APMLRReconSpace::CalculateFGInner(
 
       for (q = 0; q < 5; q++) {
         mg[q] = recon[ind0]+recon[indg[q]];
-        rg[q] = recon[ind0]-recon[indg[q]];
-        gammag[q] = 1/(1+fabs(rg[q]/delta));
-        F[ind0] += 2*beta*wg[q]*gammag[q];
-        G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+        //rg[q] = recon[ind0]-recon[indg[q]];
+        //gammag[q] = 1/(1+fabs(rg[q]/delta));
+        F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+        G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
       }
 
       for (q = 5; q < 7; q++) {
         mg[q] = recon[ind0]+recon[indg[q]];
-        rg[q] = recon[ind0]-recon[indg[q]];
-        gammag[q] = 1/(1+fabs(rg[q]/delta1));
-        F[ind0] += 2*beta1*wg[q]*gammag[q];
-        G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+        //rg[q] = recon[ind0]-recon[indg[q]];
+        //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+        F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+        G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
       }
     }
   }
@@ -209,18 +215,18 @@ void APMLRReconSpace::CalculateFGInner(
 
       for (q = 0; q < 5; q++) {
         mg[q] = recon[ind0]+recon[indg[q]];
-        rg[q] = recon[ind0]-recon[indg[q]];
-        gammag[q] = 1/(1+fabs(rg[q]/delta));
-        F[ind0] += 2*beta*wg[q]*gammag[q];
-        G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+        //rg[q] = recon[ind0]-recon[indg[q]];
+        //gammag[q] = 1/(1+fabs(rg[q]/delta));
+        F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+        G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
       }
 
       for (q = 5; q < 7; q++) {
         mg[q] = recon[ind0]+recon[indg[q]];
-        rg[q] = recon[ind0]-recon[indg[q]];
-        gammag[q] = 1/(1+fabs(rg[q]/delta1));
-        F[ind0] += 2*beta1*wg[q]*gammag[q];
-        G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+        //rg[q] = recon[ind0]-recon[indg[q]];
+        //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+        F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+        G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
       }
     }
   }
@@ -246,18 +252,18 @@ void APMLRReconSpace::CalculateFGInner(
 
     for (q = 0; q < 3; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta));
-      F[ind0] += 2*beta*wg[q]*gammag[q];
-      G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta));
+      F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
     }
 
     for (q = 3; q < 5; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta1));
-      F[ind0] += 2*beta1*wg[q]*gammag[q];
-      G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+      F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
     }
   }
 
@@ -274,18 +280,18 @@ void APMLRReconSpace::CalculateFGInner(
 
     for (q = 0; q < 3; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta));
-      F[ind0] += 2*beta*wg[q]*gammag[q];
-      G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta));
+      F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
     }
 
     for (q = 3; q < 5; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
       rg[q] = recon[ind0]-recon[indg[q]];
       gammag[q] = 1/(1+fabs(rg[q]/delta1));
-      F[ind0] += 2*beta1*wg[q]*gammag[q];
-      G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+      F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
     }
   }
 
@@ -302,18 +308,18 @@ void APMLRReconSpace::CalculateFGInner(
 
     for (q = 0; q < 3; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta));
-      F[ind0] += 2*beta*wg[q]*gammag[q];
-      G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta));
+      F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/ *mg[q];
     }
 
     for (q = 3; q < 5; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta1));
-      F[ind0] += 2*beta1*wg[q]*gammag[q];
-      G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+      F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
     }
   }
 
@@ -330,18 +336,18 @@ void APMLRReconSpace::CalculateFGInner(
 
     for (q = 0; q < 3; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta));
-      F[ind0] += 2*beta*wg[q]*gammag[q];
-      G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta));
+      F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
     }
 
     for (q = 3; q < 5; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta1));
-      F[ind0] += 2*beta1*wg[q]*gammag[q];
-      G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+      F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
     }
   }
 }
@@ -388,18 +394,18 @@ void APMLRReconSpace::CalculateFGTop(
 
       for (q = 0; q < 8; q++) {
         mg[q] = recon[ind0]+recon[indg[q]];
-        rg[q] = recon[ind0]-recon[indg[q]];
-        gammag[q] = 1/(1+fabs(rg[q]/delta));
-        F[ind0] += 2*beta*wg[q]*gammag[q];
-        G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+        //rg[q] = recon[ind0]-recon[indg[q]];
+        //gammag[q] = 1/(1+fabs(rg[q]/delta));
+        F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+        G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
       }
 
       for (q = 8; q < 9; q++) {
         mg[q] = recon[ind0]+recon[indg[q]];
-        rg[q] = recon[ind0]-recon[indg[q]];
-        gammag[q] = 1/(1+fabs(rg[q]/delta1));
-        F[ind0] += 2*beta1*wg[q]*gammag[q];
-        G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+        //rg[q] = recon[ind0]-recon[indg[q]];
+        //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+        F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+        G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
       }
     }
   }
@@ -420,24 +426,24 @@ void APMLRReconSpace::CalculateFGTop(
     indg[0] = ind0+1;
     indg[1] = ind0-1;
     indg[2] = ind0+num_grids;
-    indg[3] = ind0+num_grids+1; 
+    indg[3] = ind0+num_grids+1;
     indg[4] = ind0+num_grids-1;
     indg[5] = ind0+num_grids*num_grids;
 
     for (q = 0; q < 5; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta));
-      F[ind0] += 2*beta*wg[q]*gammag[q];
-      G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta));
+      F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
     }
 
     for (q = 5; q < 6; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta1));
-      F[ind0] += 2*beta1*wg[q]*gammag[q];
-      G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+      F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
     }
   }
 
@@ -454,18 +460,18 @@ void APMLRReconSpace::CalculateFGTop(
 
     for (q = 0; q < 5; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta));
-      F[ind0] += 2*beta*wg[q]*gammag[q];
-      G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta));
+      F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
     }
 
     for (q = 5; q < 6; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
       rg[q] = recon[ind0]-recon[indg[q]];
       gammag[q] = 1/(1+fabs(rg[q]/delta1));
-      F[ind0] += 2*beta1*wg[q]*gammag[q];
-      G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+      F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
     }
   }
 
@@ -482,18 +488,18 @@ void APMLRReconSpace::CalculateFGTop(
 
     for (q = 0; q < 5; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta));
-      F[ind0] += 2*beta*wg[q]*gammag[q];
-      G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta));
+      F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
     }
 
     for (q = 5; q < 6; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta1));
-      F[ind0] += 2*beta1*wg[q]*gammag[q];
-      G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+      F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
     }
   }
 
@@ -510,18 +516,18 @@ void APMLRReconSpace::CalculateFGTop(
 
     for (q = 0; q < 5; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta));
-      F[ind0] += 2*beta*wg[q]*gammag[q];
-      G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta));
+      F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
     }
 
     for (q = 5; q < 6; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta1));
-      F[ind0] += 2*beta1*wg[q]*gammag[q];
-      G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+      F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
     }
   }
 
@@ -542,18 +548,18 @@ void APMLRReconSpace::CalculateFGTop(
 
   for (q = 0; q < 3; q++) {
     mg[q] = recon[ind0]+recon[indg[q]];
-    rg[q] = recon[ind0]-recon[indg[q]];
-    gammag[q] = 1/(1+fabs(rg[q]/delta));
-    F[ind0] += 2*beta*wg[q]*gammag[q];
-    G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+    //rg[q] = recon[ind0]-recon[indg[q]];
+    //gammag[q] = 1/(1+fabs(rg[q]/delta));
+    F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+    G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
   }
 
   for (q = 3; q < 4; q++) {
     mg[q] = recon[ind0]+recon[indg[q]];
-    rg[q] = recon[ind0]-recon[indg[q]];
-    gammag[q] = 1/(1+fabs(rg[q]/delta1));
-    F[ind0] += 2*beta1*wg[q]*gammag[q];
-    G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+    //rg[q] = recon[ind0]-recon[indg[q]];
+    //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+    F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+    G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
   }
 
   // (top-right)    
@@ -566,18 +572,18 @@ void APMLRReconSpace::CalculateFGTop(
 
   for (q = 0; q < 3; q++) {
     mg[q] = recon[ind0]+recon[indg[q]];
-    rg[q] = recon[ind0]-recon[indg[q]];
-    gammag[q] = 1/(1+fabs(rg[q]/delta));
-    F[ind0] += 2*beta*wg[q]*gammag[q];
-    G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+    //rg[q] = recon[ind0]-recon[indg[q]];
+    //gammag[q] = 1/(1+fabs(rg[q]/delta));
+    F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+    G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
   }
 
   for (q = 3; q < 4; q++) {
     mg[q] = recon[ind0]+recon[indg[q]];
-    rg[q] = recon[ind0]-recon[indg[q]];
-    gammag[q] = 1/(1+fabs(rg[q]/delta1));
-    F[ind0] += 2*beta1*wg[q]*gammag[q];
-    G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+    //rg[q] = recon[ind0]-recon[indg[q]];
+    //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+    F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+    G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
   }
 
   // (bottom-left) 
@@ -590,18 +596,18 @@ void APMLRReconSpace::CalculateFGTop(
 
   for (q = 0; q < 3; q++) {
     mg[q] = recon[ind0]+recon[indg[q]];
-    rg[q] = recon[ind0]-recon[indg[q]];
-    gammag[q] = 1/(1+fabs(rg[q]/delta));
-    F[ind0] += 2*beta*wg[q]*gammag[q];
-    G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+    //rg[q] = recon[ind0]-recon[indg[q]];
+    //gammag[q] = 1/(1+fabs(rg[q]/delta));
+    F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+    G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
   }
 
   for (q = 3; q < 4; q++) {
     mg[q] = recon[ind0]+recon[indg[q]];
-    rg[q] = recon[ind0]-recon[indg[q]];
-    gammag[q] = 1/(1+fabs(rg[q]/delta1));
-    F[ind0] += 2*beta1*wg[q]*gammag[q];
-    G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+    //rg[q] = recon[ind0]-recon[indg[q]];
+    //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+    F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+    G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
   }
 
   // (bottom-right)         
@@ -614,18 +620,18 @@ void APMLRReconSpace::CalculateFGTop(
 
   for (q = 0; q < 3; q++) {
     mg[q] = recon[ind0]+recon[indg[q]];
-    rg[q] = recon[ind0]-recon[indg[q]];
-    gammag[q] = 1/(1+fabs(rg[q]/delta));
-    F[ind0] += 2*beta*wg[q]*gammag[q];
-    G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+    //rg[q] = recon[ind0]-recon[indg[q]];
+    //gammag[q] = 1/(1+fabs(rg[q]/delta));
+    F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+    G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
   }
 
   for (q = 3; q < 4; q++) {
     mg[q] = recon[ind0]+recon[indg[q]];
-    rg[q] = recon[ind0]-recon[indg[q]];
-    gammag[q] = 1/(1+fabs(rg[q]/delta1));
-    F[ind0] += 2*beta1*wg[q]*gammag[q];
-    G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+    //rg[q] = recon[ind0]-recon[indg[q]];
+    //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+    F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+    G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
   }
 }
 
@@ -671,18 +677,18 @@ void APMLRReconSpace::CalculateFGBottom(
 
       for (q = 0; q < 8; q++) {
         mg[q] = recon[ind0]+recon[indg[q]];
-        rg[q] = recon[ind0]-recon[indg[q]];
-        gammag[q] = 1/(1+fabs(rg[q]/delta));
-        F[ind0] += 2*beta*wg[q]*gammag[q];
-        G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+        //rg[q] = recon[ind0]-recon[indg[q]];
+        //gammag[q] = 1/(1+fabs(rg[q]/delta));
+        F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+        G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
       }
 
       for (q = 8; q < 9; q++) {
         mg[q] = recon[ind0]+recon[indg[q]];
-        rg[q] = recon[ind0]-recon[indg[q]];
-        gammag[q] = 1/(1+fabs(rg[q]/delta1));
-        F[ind0] += 2*beta1*wg[q]*gammag[q];
-        G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+        //rg[q] = recon[ind0]-recon[indg[q]];
+        //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+        F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+        G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
       }
     }
   }
@@ -709,18 +715,18 @@ void APMLRReconSpace::CalculateFGBottom(
 
     for (q = 0; q < 5; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta));
-      F[ind0] += 2*beta*wg[q]*gammag[q];
-      G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta));
+      F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
     }
 
     for (q = 5; q < 6; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta1));
-      F[ind0] += 2*beta1*wg[q]*gammag[q];
-      G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+      F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
     }
   }
 
@@ -737,18 +743,18 @@ void APMLRReconSpace::CalculateFGBottom(
 
     for (q = 0; q < 5; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta));
-      F[ind0] += 2*beta*wg[q]*gammag[q];
-      G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta));
+      F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
     }
 
     for (q = 5; q < 6; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta1));
-      F[ind0] += 2*beta1*wg[q]*gammag[q];
-      G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+      F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
     }
   }
 
@@ -765,18 +771,18 @@ void APMLRReconSpace::CalculateFGBottom(
 
     for (q = 0; q < 5; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta));
-      F[ind0] += 2*beta*wg[q]*gammag[q];
-      G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta));
+      F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
     }
 
     for (q = 5; q < 6; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta1));
-      F[ind0] += 2*beta1*wg[q]*gammag[q];
-      G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+      F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
     }
   }
 
@@ -793,18 +799,18 @@ void APMLRReconSpace::CalculateFGBottom(
 
     for (q = 0; q < 5; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta));
-      F[ind0] += 2*beta*wg[q]*gammag[q];
-      G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta));
+      F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
     }
 
     for (q = 5; q < 6; q++) {
       mg[q] = recon[ind0]+recon[indg[q]];
-      rg[q] = recon[ind0]-recon[indg[q]];
-      gammag[q] = 1/(1+fabs(rg[q]/delta1));
-      F[ind0] += 2*beta1*wg[q]*gammag[q];
-      G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+      //rg[q] = recon[ind0]-recon[indg[q]];
+      //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+      F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+      G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
     }
   }
 
@@ -825,18 +831,18 @@ void APMLRReconSpace::CalculateFGBottom(
 
   for (q = 0; q < 3; q++) {
     mg[q] = recon[ind0]+recon[indg[q]];
-    rg[q] = recon[ind0]-recon[indg[q]];
-    gammag[q] = 1/(1+fabs(rg[q]/delta));
-    F[ind0] += 2*beta*wg[q]*gammag[q];
-    G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+    //rg[q] = recon[ind0]-recon[indg[q]];
+    //gammag[q] = 1/(1+fabs(rg[q]/delta));
+    F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+    G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
   }
 
   for (q = 3; q < 4; q++) {
     mg[q] = recon[ind0]+recon[indg[q]];
-    rg[q] = recon[ind0]-recon[indg[q]];
-    gammag[q] = 1/(1+fabs(rg[q]/delta1));
-    F[ind0] += 2*beta1*wg[q]*gammag[q];
-    G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+    //rg[q] = recon[ind0]-recon[indg[q]];
+    //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+    F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+    G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
   }
 
   // (top-right)   
@@ -849,18 +855,18 @@ void APMLRReconSpace::CalculateFGBottom(
 
   for (q = 0; q < 3; q++) {
     mg[q] = recon[ind0]+recon[indg[q]];
-    rg[q] = recon[ind0]-recon[indg[q]];
-    gammag[q] = 1/(1+fabs(rg[q]/delta));
-    F[ind0] += 2*beta*wg[q]*gammag[q];
-    G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+    //rg[q] = recon[ind0]-recon[indg[q]];
+    //gammag[q] = 1/(1+fabs(rg[q]/delta));
+    F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+    G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
   }
 
   for (q = 3; q < 4; q++) {
     mg[q] = recon[ind0]+recon[indg[q]];
-    rg[q] = recon[ind0]-recon[indg[q]];
-    gammag[q] = 1/(1+fabs(rg[q]/delta1));
-    F[ind0] += 2*beta1*wg[q]*gammag[q];
-    G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+    //rg[q] = recon[ind0]-recon[indg[q]];
+    //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+    F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+    G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
   }
 
   // (bottom-left)   
@@ -873,18 +879,18 @@ void APMLRReconSpace::CalculateFGBottom(
 
   for (q = 0; q < 3; q++) {
     mg[q] = recon[ind0]+recon[indg[q]];
-    rg[q] = recon[ind0]-recon[indg[q]];
-    gammag[q] = 1/(1+fabs(rg[q]/delta));
-    F[ind0] += 2*beta*wg[q]*gammag[q];
-    G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+    //rg[q] = recon[ind0]-recon[indg[q]];
+    //gammag[q] = 1/(1+fabs(rg[q]/delta));
+    F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+    G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
   }
 
   for (q = 3; q < 4; q++) {
     mg[q] = recon[ind0]+recon[indg[q]];
-    rg[q] = recon[ind0]-recon[indg[q]];
-    gammag[q] = 1/(1+fabs(rg[q]/delta1));
-    F[ind0] += 2*beta1*wg[q]*gammag[q];
-    G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+    //rg[q] = recon[ind0]-recon[indg[q]];
+    //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+    F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+    G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
   }
 
   // (bottom-right)          
@@ -897,18 +903,18 @@ void APMLRReconSpace::CalculateFGBottom(
 
   for (q = 0; q < 3; q++) {
     mg[q] = recon[ind0]+recon[indg[q]];
-    rg[q] = recon[ind0]-recon[indg[q]];
-    gammag[q] = 1/(1+fabs(rg[q]/delta));
-    F[ind0] += 2*beta*wg[q]*gammag[q];
-    G[ind0] -= 2*beta*wg[q]*gammag[q]*mg[q];
+    //rg[q] = recon[ind0]-recon[indg[q]];
+    //gammag[q] = 1/(1+fabs(rg[q]/delta));
+    F[ind0] += 2*beta*wg[q]/* *gammag[q]*/;
+    G[ind0] -= 2*beta*wg[q]/* *gammag[q]*/*mg[q];
   }
 
   for (q = 3; q < 4; q++) {
     mg[q] = recon[ind0]+recon[indg[q]];
-    rg[q] = recon[ind0]-recon[indg[q]];
-    gammag[q] = 1/(1+fabs(rg[q]/delta1));
-    F[ind0] += 2*beta1*wg[q]*gammag[q];
-    G[ind0] -= 2*beta1*wg[q]*gammag[q]*mg[q];
+    //rg[q] = recon[ind0]-recon[indg[q]];
+    //gammag[q] = 1/(1+fabs(rg[q]/delta1));
+    F[ind0] += 2*beta1*wg[q]/* *gammag[q]*/;
+    G[ind0] -= 2*beta1*wg[q]/* *gammag[q]*/*mg[q];
   }
 
 
@@ -965,6 +971,7 @@ void APMLRReconSpace::CalculateFG(
         num_grids);
     --remaining_slices;
   }
+  if(slice_final_index>slice_end_index && slice_begin_index>0){
   CalculateFGInner(
       init_recon_ptr, init_F_ptr, init_G_ptr, 
       beta, beta1, delta, delta1, regw, 

@@ -37,8 +37,6 @@ class DataSubset
         p.push_back(i);
 
       int m=nsubsets_;
-      indices_.reserve(m);
-
       for(int i=0; i<m; ++i){
         std::vector<int> k {};
         indices_.push_back(k);
@@ -50,10 +48,9 @@ class DataSubset
 
     void OrganizeOrderedSubsets()
     {
-      subsets_.reserve(nsubsets_);
-      subset_thetas_.reserve(nsubsets_);
-
       for(int i=0; i<nsubsets_; ++i){
+        std::cout << "allocating=" << ray_per_proj_ << "x" << indices_[i].size() << 
+          "=" << ray_per_proj_*indices_[i].size() << " fp # for subset=" << i << '\n'; 
         subsets_.push_back(new float[ray_per_proj_*indices_[i].size()]);
         subset_thetas_.push_back(new float[indices_[i].size()]);
       }
@@ -64,8 +61,9 @@ class DataSubset
           float *dest = subsets_[i]+j*ray_per_proj_;
           std::cout << "Copying proj=" << indices_[i][j] << " to dest=" << subsets_[i] << "+" << j << "*" << ray_per_proj_  << "=" << dest << std::endl;
 
-          std::memcpy(dest, source, ray_per_proj_*sizeof(float));
-
+          for(size_t k=0; k<ray_per_proj_; ++k)
+            dest[k] = source[k];
+          
           subset_thetas_[i][j] = thetas_[indices_[i][j]];
 
           std::cout << "Indices[" << i << "]["<<j<<"]="<<indices_[i][j];
@@ -168,6 +166,8 @@ class DataSubset
       for(int i=0; i<num_recon_slices*ncols_*ncols_; ++i)
         (*recon_)[i] = recon_init_val_;
 
+      std::cout << "inited recon=" << &((*recon_)[0]) << std::endl;
+
       ReOrganizeData(type);
     }
 
@@ -199,6 +199,8 @@ class DataSubset
           ntotsinogs_, indices_[id].size(), nsinogs_, ncols_, ncols_, 
           center_, nneighbors_, recon_init_val_);
       metadata->recon(*recon_);  // Forward reconstruction object
+
+      std::cout << "returning subset=" << id << "; offset=" << Subsets(id) << "; count=" << metadata->count() << "; recon=" << &((*recon_)[0]) << std::endl;
 
       DataRegionBase<float, TraceMetadata> *subset_region = 
         new DataRegionBase<float, TraceMetadata>(

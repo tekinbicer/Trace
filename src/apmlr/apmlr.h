@@ -19,6 +19,13 @@ class APMLRDataRegion : public DataRegionBase<float, TraceMetadata>{
     float *G_ = nullptr;
 
   public:
+    APMLRDataRegion(DataRegionBase<float, TraceMetadata> *data_region):
+      APMLRDataRegion(
+        &((*data_region)[0]), 
+        data_region->count(), 
+        &data_region->metadata()
+      ) {}
+
     APMLRDataRegion(
         float *data, 
         size_t count, 
@@ -111,7 +118,10 @@ class APMLRReconSpace :
     }
 
     void UpdateRecon(
-        APMLRDataRegion &slices, // Reconstruction object
+        //APMLRDataRegion &slices, // Reconstruction object
+        ADataRegion<float> &recon_region,                  // Reconstruction object
+        int num_neighbor_recon_slices, int num_grids,
+        float *F, float *G,
         DataRegion2DBareBase<float> &comb_replica); // Locally combined replica
 
     void CalculateFG(

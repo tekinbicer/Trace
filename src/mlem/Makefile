@@ -7,7 +7,7 @@ ROOTDIR = ../../
 BINDIR = ${ROOTDIR}/bin/
 
 # Flags
-CFLAGS = -O0 -Wall -Wextra -std=c++11 
+CFLAGS = -O2 -Wall -Wextra -std=c++11 
 CFLAGS += -g -fPIC -DTIMERON 
 #CFLAGS += -no-inline-factor -no-inline-max-size  # didn't help
 

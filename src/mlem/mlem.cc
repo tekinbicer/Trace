@@ -70,6 +70,7 @@ void MLEMReconSpace::UpdateReconReplica(
 void MLEMReconSpace::Initialize(int n_grids){
   num_grids = n_grids; 
 
+  try{
   coordx = new float[num_grids+1]; 
   coordy = new float[num_grids+1];
   ax = new float[num_grids+1];
@@ -80,6 +81,9 @@ void MLEMReconSpace::Initialize(int n_grids){
   coory = new float[2*num_grids];
   leng = new float[2*num_grids];
   indi = new int[2*num_grids];
+  } catch (std::bad_alloc& ba) {
+    std::cerr << "bad_alloc caught: " << ba.what() << '\n';
+  }
 }
 
 void MLEMReconSpace::Finalize(){
@@ -124,8 +128,9 @@ void MLEMReconSpace::Reduce(MirroredRegionBareBase<float> &input)
     int curr_slice = metadata.RaySlice(rays.index());
     int curr_slice_offset = curr_slice*num_grids*num_grids;
     float *recon = (&(metadata.recon()[0])+curr_slice_offset);
+    //std::cout << "recon=" << recon << std::endl;
 
-    //std::cout << "curr_proj=" << proj << "; theta_q=" << theta_q << std::endl;
+    //std::cout << "curr_proj=" << proj << "/" << count_projs  << "; offset=" << &(rays[0]) << "-" << &(rays[0])+(num_cols-1) << "; theta_q=" << theta_q << std::endl;
 
     for (int curr_col=0; curr_col<num_cols; ++curr_col) {
       /// Calculate coordinates

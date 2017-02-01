@@ -1,17 +1,12 @@
 #include "pml.h"
 
 void PMLReconSpace::UpdateRecon(
-    //PMLDataRegion &slices,                      // Input slices, metadata, recon
     ADataRegion<float> &recon,                  // Reconstruction object
     float *F, float *G,
     DataRegion2DBareBase<float> &comb_replica)  // Locally combined replica
 {
-  //auto &recon = slices.metadata().recon();
   size_t rows = comb_replica.rows();
   size_t cols = comb_replica.cols()/2;
-
-  //float *F = slices.F();
-  //float *G = slices.G();
 
   size_t nans=0;
   for(size_t i=0; i<rows; ++i){

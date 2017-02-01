@@ -17,8 +17,13 @@ class TraceRuntimeConfig {
     std::string kReconOutputPath;
     std::string kReconDatasetPath;
     int iteration;
+    int block_remove_iteration;
     float center;
     int thread_count;
+    int subsets = 1;
+    int block_remove_subsets = 1;
+    int write_freq = 0;
+    int write_block_freq = 0;
 
     TraceRuntimeConfig(int argc, char **argv, int rank, int size){
       try
@@ -42,10 +47,20 @@ class TraceRuntimeConfig {
           false, "/data", "string");
         TCLAP::ValueArg<int> argIteration(
           "i", "iteration", "Number of iterations", true, 0, "int");
+        TCLAP::ValueArg<int> argBlockRemoveIteration(
+          "", "block-remove-iteration", "Number of iterations for removing subset blocks on 3D image", false, 0, "int");
         TCLAP::ValueArg<float> argCenter(
           "c", "center", "Center value", false, 0., "float");
         TCLAP::ValueArg<int> argThreadCount(
           "t", "thread", "Number of threads per process", false, 1, "int");
+        TCLAP::ValueArg<float> argSubsets(
+          "", "subsets", "Ordered subsets", false, 1, "int");
+        TCLAP::ValueArg<float> argBlockRemoveSubsets(
+          "", "block-remove-subsets", "Number of subsets for removing block lines", false, 1, "int");
+        TCLAP::ValueArg<float> argWriteFreq(
+          "", "write-frequency", "Write frequency", false, 0, "int");
+        TCLAP::ValueArg<float> argWriteBlockFreq(
+          "", "write-block-frequency", "Write frequency during subset block cleaning", false, 0, "int");
 
         cmd.add(argProjectionFilePath);
         cmd.add(argProjectionDatasetPath);
@@ -54,8 +69,13 @@ class TraceRuntimeConfig {
         cmd.add(argReconOutputPath);
         cmd.add(argReconDatasetPath);
         cmd.add(argIteration);
+        cmd.add(argBlockRemoveIteration);
         cmd.add(argCenter);
         cmd.add(argThreadCount);
+        cmd.add(argSubsets);
+        cmd.add(argBlockRemoveSubsets);
+        cmd.add(argWriteFreq);
+        cmd.add(argWriteBlockFreq);
 
         cmd.parse(argc, argv);
         kProjectionFilePath = argProjectionFilePath.getValue();
@@ -65,8 +85,13 @@ class TraceRuntimeConfig {
         kReconOutputPath = argReconOutputPath.getValue();
         kReconDatasetPath = argReconDatasetPath.getValue();
         iteration = argIteration.getValue();
+        block_remove_iteration = argBlockRemoveIteration.getValue();
         center = argCenter.getValue();
         thread_count = argThreadCount.getValue();
+        subsets = argSubsets.getValue();
+        block_remove_subsets = argBlockRemoveSubsets.getValue();
+        write_freq= argWriteFreq.getValue();
+        write_block_freq= argWriteBlockFreq.getValue();
 
         std::cout << "MPI rank:"<< rank << "; MPI size:" << size << std::endl;
         if(rank==0)
@@ -78,8 +103,13 @@ class TraceRuntimeConfig {
           std::cout << "Output file path=" << kReconOutputPath << std::endl;
           std::cout << "Recon. dataset path=" << kReconDatasetPath << std::endl;
           std::cout << "Number of iterations=" << iteration << std::endl;
+          std::cout << "Number of block remove iterations=" << block_remove_iteration << std::endl;
           std::cout << "Center value=" << center << std::endl;
           std::cout << "Number of threads per process=" << thread_count << std::endl;
+          std::cout << "Subsets=" << subsets  << std::endl;
+          std::cout << "Block remove subsets=" << block_remove_subsets  << std::endl;
+          std::cout << "Write frequency=" << write_freq << std::endl;
+          std::cout << "Write block frequency=" << write_block_freq << std::endl;
         }
       }
       catch (TCLAP::ArgException &e)
@@ -133,31 +163,7 @@ int main(int argc, char **argv)
     static_cast<float*>(theta->data), 
     ddims,
     n_blocks, beg_index,
-    100, config.center, 0, 1., SubsetType::Ordered);            /// Number of subsets
-
-  ///* Setup metadata data structure */
-  //// INFO: TraceMetadata destructor frees theta->data!
-  //// TraceMetadata internally creates reconstruction object
-  //TraceMetadata trace_metadata(
-  //    static_cast<float *>(theta->data),  /// float const *theta,
-  //    0,                                  /// int const proj_id,
-  //    beg_index,                          /// int const slice_id,
-  //    0,                                  /// int const col_id,
-  //    input_slice->metadata->dims[1],     /// int const num_tot_slices,
-  //    input_slice->metadata->dims[0],     /// int const num_projs,
-  //    n_blocks,                           /// int const num_slices,
-  //    input_slice->metadata->dims[2],     /// int const num_cols,
-  //    input_slice->metadata->dims[2],     /// int const num_grids,
-  //    config.center,                      /// float const center,
-  //    0,                                  /// int const num_neighbor_recon_slices,
-  //    1.);                                /// float const recon_init_val
-
-  //// INFO: DataRegionBase destructor deletes input_slice.data pointer
-  //ADataRegion<float> *slices = 
-  //  new DataRegionBase<float, TraceMetadata>(
-  //      static_cast<float *>(input_slice->data),
-  //      trace_metadata.count(),
-  //      &trace_metadata);
+    config.subsets, config.center, 0, 1., SubsetType::Ordered);/// Number of subsets
 
   /***********************/
   /* Initiate middleware */
@@ -183,18 +189,79 @@ int main(int argc, char **argv)
         comm, main_recon_space, config.thread_count); 
   /**********************/
 
-  /**************************/
-  /* Perform reconstruction */
+
+  /**************************************/
+  /* Perform reconstruction             */
   /* Define job size per thread request */
   int64_t req_number = ncols;
 
   DataRegionBase<float, TraceMetadata> *slices = nullptr;
+  int counter=0;
   for(int i=0; i<config.iteration; ++i){
     std::cout << "Iteration: " << i << std::endl;
 
     for(int j=0; j<data_subset.NSubsets(); ++j){
       std::cout << "Subset: " << j << "/" << data_subset.NSubsets() << std::endl;
       slices = data_subset.DataRegionSubset(j);
+      std::cout << "Data region was read" << std::endl;
+      std::cout << "Parallel reconstruction is about to start: recon=" << &(slices->metadata().recon()[0]) << std::endl;
+      engine->RunParallelReduction(*slices, req_number);  /// Reconstruction
+      std::cout << "Parallel reconstruction was done" << std::endl;
+      engine->ParInPlaceLocalSynchWrapper();              /// Local combination
+      std::cout << "Inplace local synch was done" << std::endl;
+      
+      /// Update reconstruction object
+      main_recon_space->UpdateRecon(slices->metadata().recon(), main_recon_replica);
+      std::cout << "Recon space was updated" << std::endl;
+
+      /* Periodically write to disk */
+      if(config.write_freq>0 && counter%config.write_freq==0){
+      std::stringstream iteration_stream;
+      iteration_stream << std::setfill('0') << std::setw(6) << i << j;
+      std::string outputpath = iteration_stream.str() + "-recon.h5";
+      trace_io::WriteRecon(
+          slices->metadata(), *d_metadata,
+          outputpath,
+          config.kReconDatasetPath);
+      std::cout << "Image was written" << std::endl;
+      }
+      ++counter;
+      /******************************/
+
+      // Reset iteration
+      engine->ResetReductionSpaces(init_val);
+      std::cout << "Reduction space was cleaned" << std::endl;
+      // slices->ResetMirroredRegionIter();
+    }
+  }
+  /**************************/
+
+  /* Write reconstructed data to disk */
+  std::string outputpath = "output-recon.h5";
+  trace_io::WriteRecon(
+      slices->metadata(), *d_metadata, 
+      outputpath, 
+      config.kReconDatasetPath);
+
+
+
+
+  /***************************/
+  /* Remove block signs      */
+  DataSubset data_br_subset(
+    static_cast<float*>(input_slice->data), 
+    static_cast<float*>(theta->data), 
+    ddims,
+    n_blocks, beg_index,
+    config.block_remove_subsets, config.center, 0, 1., SubsetType::Ordered);/// Number of subsets
+
+  counter=0;
+  for(int i=0; i<config.block_remove_iteration; ++i){
+    std::cout << "Block remove iteration: " << i << std::endl;
+
+    for(int j=0; j<data_br_subset.NSubsets(); ++j){
+      std::cout << "Subset: " << j << "/" << data_subset.NSubsets() << std::endl;
+      slices = data_br_subset.DataRegionSubset(j);
       std::cout << "Data region was read" << std::endl;
       engine->RunParallelReduction(*slices, req_number);  /// Reconstruction
       std::cout << "Parallel reconstruction was done" << std::endl;
@@ -206,15 +273,18 @@ int main(int argc, char **argv)
       std::cout << "Recon space was updated" << std::endl;
 
       /* Periodically write to disk */
+      if(config.write_block_freq>0 && counter%config.write_block_freq==0){
       std::stringstream iteration_stream;
       iteration_stream << std::setfill('0') << std::setw(6) << i << j;
-      std::string outputpath = iteration_stream.str() + "-recon.h5";
+      std::string outputpath = iteration_stream.str() + "-block-recon.h5";
       trace_io::WriteRecon(
           slices->metadata(), *d_metadata,
           outputpath,
           config.kReconDatasetPath);
-      /******************************/
       std::cout << "Image was written" << std::endl;
+      }
+      ++counter;
+      /******************************/
 
       // Reset iteration
       engine->ResetReductionSpaces(init_val);
@@ -225,28 +295,21 @@ int main(int argc, char **argv)
   /**************************/
 
   /* Write reconstructed data to disk */
+  std::string outputpath_cleaned = "output-cleaned-recon.h5";
   trace_io::WriteRecon(
       slices->metadata(), *d_metadata, 
-      config.kReconOutputPath, 
+      outputpath_cleaned, 
       config.kReconDatasetPath);
 
+
   /* Clean-up the resources */
-  std::cout << "1" << std::endl;
   delete d_metadata->dims;
-  std::cout << "2" << std::endl;
   delete d_metadata;
-  std::cout << "3" << std::endl;
   delete slices;
-  std::cout << "4" << std::endl;
   delete t_metadata->dims;
-  std::cout << "5" << std::endl;
   delete t_metadata;
-  std::cout << "6" << std::endl;
   delete theta;
-  std::cout << "7" << std::endl;
   delete engine;
-  std::cout << "8" << std::endl;
   delete input_slice;
-  std::cout << "9" << std::endl;
 }
 
