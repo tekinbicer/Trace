@@ -62,7 +62,7 @@ class TraceRuntimeConfig {
           "", "controller-ip", "Controller host/ip address", false, "cooleylogin2", 
             "string");
         TCLAP::ValueArg<float> argControllerPort(
-          "", "controller-port", "Controller port number", false, 4000, "int");
+          "", "controller-port", "Controller port number", false, 3999, "int");
         TCLAP::ValueArg<float> argPublisherPort(
           "", "publisher-port", "Local publisher's socket port number", false, 4000, "int");
 
