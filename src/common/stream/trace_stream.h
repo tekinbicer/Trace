@@ -30,11 +30,15 @@ class TraceStream
     TraceMQ& traceMQ() { return traceMQ_; }
 
   public:
-    TraceStream(std::string dest_ip,
-                int dest_port,
+    TraceStream(std::string r_dest_ip,
+                int r_dest_port,
+                std::string r_controller_ip,
+                int r_controller_port,
+                int l_publisher_port,
                 uint32_t window_len, 
                 int comm_rank,
                 int comm_size);
+
 
     /* Create a data region from sliding window
      * @param recon_image Initial values of reconstructed image
@@ -48,6 +52,14 @@ class TraceStream
     DataRegionBase<float, TraceMetadata>* ReadSlidingWindow(
       DataRegionBareBase<float> &recon_image, 
       int step);
+
+    /* Publish reconstructed image part with the subscribers
+     *
+     * @param data  Reconstructed image pointer
+     * @param count Number of pixels
+     *
+     */
+    void PublishRecon(float *data, int count);
 
     tomo_msg_metadata_t metadata() { return traceMQ().metadata(); }
     uint32_t counter() const { return counter_; }

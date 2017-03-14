@@ -21,6 +21,9 @@ class TraceRuntimeConfig {
     int center;
     std::string dest_host;
     int dest_port;
+    std::string controller_host;
+    int controller_port;
+    int publisher_port;
 
     TraceRuntimeConfig(int argc, char **argv, int rank, int size){
       try
@@ -55,6 +58,13 @@ class TraceRuntimeConfig {
             "string");
         TCLAP::ValueArg<float> argDestPort(
           "", "dest-port", "Starting port of destination host", false, 5560, "int");
+        TCLAP::ValueArg<std::string> argControllerHost(
+          "", "controller-ip", "Controller host/ip address", false, "cooleylogin2", 
+            "string");
+        TCLAP::ValueArg<float> argControllerPort(
+          "", "controller-port", "Controller port number", false, 4000, "int");
+        TCLAP::ValueArg<float> argPublisherPort(
+          "", "publisher-port", "Local publisher's socket port number", false, 4000, "int");
 
         cmd.add(argReconOutputPath);
         cmd.add(argReconOutputDir);
@@ -67,6 +77,9 @@ class TraceRuntimeConfig {
         cmd.add(argWindowIter);
         cmd.add(argDestHost);
         cmd.add(argDestPort);
+        cmd.add(argControllerHost);
+        cmd.add(argControllerPort);
+        cmd.add(argPublisherPort);
 
         cmd.parse(argc, argv);
         kReconOutputPath = argReconOutputPath.getValue();
@@ -80,6 +93,13 @@ class TraceRuntimeConfig {
         window_iter= argWindowIter.getValue();
         dest_host= argDestHost.getValue();
         dest_port= argDestPort.getValue();
+        controller_host= argControllerHost.getValue();
+        controller_port= argControllerPort.getValue(); 
+        /// FIXME
+        /// Currently we make sure that each mpi process has a unique
+        /// publisher port number using its rank id. Find a different
+        /// way to make this happen.
+        publisher_port= argPublisherPort.getValue()+rank;
 
         std::cout << "MPI rank:"<< rank << "; MPI size:" << size << std::endl;
         if(rank==0)
@@ -95,6 +115,9 @@ class TraceRuntimeConfig {
           std::cout << "Window iter=" << window_iter << std::endl;
           std::cout << "Destination host address=" << dest_host << std::endl;
           std::cout << "Destination port=" << dest_port << std::endl;
+          std::cout << "Controller host address=" << controller_host << std::endl;
+          std::cout << "Controller port=" << controller_port << std::endl;
+          std::cout << "Publisher port=" << publisher_port << std::endl;
         }
       }
       catch (TCLAP::ArgException &e)
@@ -110,7 +133,11 @@ int main(int argc, char **argv)
   DISPCommBase<float> *comm =
         new DISPCommMPI<float>(&argc, &argv);
   TraceRuntimeConfig config(argc, argv, comm->rank(), comm->size());
-  TraceStream tstream(config.dest_host, config.dest_port, config.window_len, 
+  TraceStream tstream(
+    config.dest_host, config.dest_port, 
+    config.controller_host, config.controller_port,
+    config.publisher_port,
+    config.window_len, 
     comm->rank(), comm->size());
 
   /* Get metadata structure */
@@ -200,6 +227,9 @@ int main(int argc, char **argv)
         #endif
         engine->ResetReductionSpaces(init_val);
         curr_slices->ResetMirroredRegionIter();
+
+        /// Publish reconstructed image to the subscribers
+        tstream.PublishRecon(&(recon_image[0]),recon_image.count());
       }
 
       /* Write reconstructed data to disk */

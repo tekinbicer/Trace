@@ -53,13 +53,18 @@ enum class TMQ_State { DATA, FIN };
 class TraceMQ
 {
   private:
-    std::string dest_ip_;
-    int dest_port_;
+    std::string r_dest_ip_;
+    int r_dest_port_;
+    std::string r_controller_ip_;
+    int r_controller_port_;
+    int l_publisher_port_;
     int comm_rank_;
     int comm_size_;
 
-    void *context;
-    void *server;
+    void *context;      /// ZMQ context
+    void *server;       /// Remote data acquisition socket  (REQ)
+    void *publisher;    /// Local publisher socket          (PUB)
+    void *controller;   /// Remote controller socket        (REQ)
 
     /* State of the TraceMQ
      *
@@ -71,28 +76,6 @@ class TraceMQ
     uint64_t seq_;
 
     tomo_msg_metadata_t metadata_;
-
-    //tomo_msg_t* prepare_data_req_msg(uint64_t seq_n);
-    //tomo_msg_t* prepare_data_rep_msg(uint64_t seq_n, int projection_id,
-    //                                 float theta, float center,
-    //                                 uint64_t data_size, float *data);
-
-    //tomo_msg_t* prepare_data_info_rep_msg(uint64_t seq_n, 
-    //                                      int beg_sinogram, int n_sinograms,
-    //                                      int n_rays_per_proj_row,
-    //                                      uint64_t tn_sinograms);
-    //tomo_msg_t* prepare_data_info_req_msg(uint64_t seq_n, 
-    //                                      uint32_t comm_rank, 
-    //                                      uint32_t comm_size);
-    //tomo_msg_t* prepare_fin_msg(uint64_t seq_n);
-
-    //void send_msg(void *server, tomo_msg_t* msg);
-    //tomo_msg_t* recv_msg(void *server);
-
-    //tomo_msg_data_info_rep_t* read_data_info_rep(tomo_msg_t *msg);
-    //void print_data_info_rep_msg(tomo_msg_data_info_rep_t *msg);
-    //void print_data(tomo_msg_data_t *msg, size_t data_count);
-    //tomo_msg_data_info_req_t* read_data_info_req(tomo_msg_t *msg);
 
     /** 
     This is a helper function for setting parameters in tomo_msg header.
@@ -140,14 +123,21 @@ class TraceMQ
     void send_msg(void *server, tomo_msg_t* msg);
     tomo_msg_t* recv_msg(void *server);
 
+    /**
+     Return the full hostname of this node
+     */
+    char* MyHostname();
 
   public:
     /**
     Connects to the destination host with given port. Also sets the comm_rank 
     and comm_size information in the class. 
     */
-    TraceMQ(std::string dest_ip,
-            int dest_port,
+    TraceMQ(std::string r_dest_ip,
+            int r_dest_port,
+            std::string r_controller_ip, 
+            int r_controller_port,
+            int l_publisher_port,
             int comm_rank,
             int comm_size);
     ~TraceMQ();
@@ -181,6 +171,10 @@ class TraceMQ
     tomo_msg_metadata_t metadata() const { return metadata_; }
     void metadata(tomo_msg_metadata_t metadata) { metadata_ = metadata; }
 
+    /**
+    Send reconstructed data to the interested subscribers
+    */
+    void publish(float *data, int count);
 };
 
 #endif // TRACE_COMMONS_STREAM_TRACE_MQ_H

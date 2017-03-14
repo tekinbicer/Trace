@@ -1,23 +1,56 @@
-#include "trace_mq.h"
 #include <cstring>
 #include <cassert>
+#include <netdb.h>
+#include "trace_mq.h"
 
 TraceMQ::TraceMQ(
-  std::string dest_ip, int dest_port, int comm_rank, int comm_size) : 
-    dest_ip_ {dest_ip}, 
-    dest_port_ {dest_port}, 
-    comm_rank_ {comm_rank}, 
+  std::string r_dest_ip, int r_dest_port, 
+  std::string r_controller_ip, int r_controller_port,
+  int l_publisher_port,
+  int comm_rank, int comm_size) : 
+    r_dest_ip_ {r_dest_ip}, 
+    r_dest_port_ {r_dest_port}, 
+    r_controller_ip_ {r_controller_ip},
+    r_controller_port_ {r_controller_port},
+    l_publisher_port_ {l_publisher_port},
+    comm_rank_ {comm_rank},
     comm_size_ {comm_size},
     state_ {TMQ_State::DATA},  /// Initial state is expecting DATA
     seq_ {0}
 {
-  std::string addr("tcp://" + dest_ip_ + ":" + 
-    std::to_string(static_cast<long long>(dest_port_+comm_rank_)));
+  std::string addr("tcp://" + r_dest_ip_ + ":" + 
+    std::to_string(static_cast<long long>(r_dest_port_+comm_rank_)));
   std::cout << "[" << comm_rank_ << "] Destination address=" << addr << std::endl;
 
   context = zmq_ctx_new();
+  /// setup the socket for data acquisition process
   server = zmq_socket(context, ZMQ_REQ); 
   zmq_connect(server, addr.c_str()); 
+
+  /// Setup sockets with controller process
+  // PUB
+  addr = std::string("tcp://*:" + l_publisher_port_);
+  publisher = zmq_socket (context, ZMQ_PUB);
+  int rc = zmq_bind (publisher, addr.c_str()); assert (rc == 0);
+
+  // REQ
+  controller = zmq_socket(context, ZMQ_REQ); 
+  zmq_connect(controller, addr.c_str()); 
+}
+
+char* TraceMQ::MyHostname(){
+  char *hostname = (char*) malloc(1024);
+  memset((void*)hostname, '\0', 1024);
+  gethostname(hostname, 1023);
+  struct hostent* h;
+  h = gethostbyname(hostname);
+  memset((void*)hostname, '\0', 1024);
+  /// h->h_name has the full hostname address
+  sprintf(hostname, "%s", h->h_name);
+  printf("My hostname is %s\n", hostname);
+  free(h);
+
+  return hostname;
 }
 
 void TraceMQ::Initialize() {
@@ -39,7 +72,28 @@ void TraceMQ::Initialize() {
   send_msg(server, msg);
   free_msg(msg);
   ++seq_;
+
+  /// Handshake with controller
+  /// Send: hostname;rank;beg_sin_id;#sinogs;#cols
+  /// use metadata above to setup message
+  int m_size=2048;
+  char *message= (char*) malloc(m_size);   /// FIXME:Constant message size
+  memset((void*)message, '\0', m_size);
+  char *hname = MyHostname();
+  sprintf(message, "%s;%u;%u;%u;%u;", hname, comm_rank_, 
+          metadata().beg_sinogram, metadata().tn_sinograms, 
+          metadata().n_rays_per_proj_row);
+  free(hname);
+  zmq_send(controller, message, m_size, 0);
+  free(message);
+  printf("synching with controller..");
+  /// TODO: At this point make sure controller connects to publisher of 
+  /// this worker and then sends synch message.
+  char tmp;
+  int rc = zmq_recv(controller, &tmp, 0, 0); assert (rc == 0);  /// Synch with controller
+  printf("done\n");
 }
+
 
 tomo_msg_t* TraceMQ::ReceiveMsg() {
   /// If previously fin message was recevied, return nullptr
@@ -77,6 +131,8 @@ tomo_msg_t* TraceMQ::ReceiveMsg() {
 }
 
 TraceMQ::~TraceMQ() {
+  zmq_close(controller);
+  zmq_close(publisher);
   zmq_close(server);
   zmq_ctx_destroy(context);
 }
@@ -214,6 +270,22 @@ tomo_msg_t* TraceMQ::recv_msg(void *server){
 }
 
 void TraceMQ::free_msg(tomo_msg_t *msg) {
-  free(msg);
-  msg=NULL;
+  free(msg); msg=NULL;
+}
+
+
+void TraceMQ::publish(float *data, int count){
+  /// Prepare envelop 
+  zmq_msg_t zmsg_env;
+  int rc = zmq_msg_init_size(&zmsg_env, sizeof(int)); assert(rc==0);
+  memcpy((void*)zmq_msg_data(&zmsg_env), (void*)metadata().beg_sinogram, sizeof(uint32_t));
+  rc = zmq_msg_send(&zmsg_env, publisher, ZMQ_SNDMORE);
+
+  /// Prepare and send the data with envelop
+  zmq_msg_t zmsg;
+  size_t data_size = sizeof(*data)*count;
+  rc = zmq_msg_init_size(&zmsg, count*sizeof(float)); assert(rc==0);
+  memcpy((void*)zmq_msg_data(&zmsg), (void*)data, data_size);
+  rc = zmq_msg_send(&zmsg, publisher, ZMQ_DONTWAIT); assert(rc==(int)data_size);  /// Non-blocking
+  //rc = zmq_msg_send(&zmsg, publisher, 0); assert(rc==(int)data_size); /// Blocking
 }

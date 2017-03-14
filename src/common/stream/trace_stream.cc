@@ -1,14 +1,19 @@
 #include "trace_stream.h"
 
 TraceStream::TraceStream(
-    std::string dest_ip,
-    int dest_port,
+    std::string r_dest_ip,
+    int r_dest_port,
+    std::string r_controller_ip,
+    int r_controller_port,
+    int l_publisher_port,
     uint32_t window_len, 
     int comm_rank,
     int comm_size) :
   window_len_ {window_len},
   counter_ {0},
-  traceMQ_ {dest_ip, dest_port, comm_rank, comm_size}
+  traceMQ_ {r_dest_ip, r_dest_port, 
+            r_controller_ip, r_controller_port, l_publisher_port,
+            comm_rank, comm_size}
 {
   traceMQ().Initialize();
 }
@@ -135,3 +140,7 @@ DataRegionBase<float, TraceMetadata>* TraceStream::SetupTraceDataRegion(
   return curr_data;
 }
 
+void TraceStream::PublishRecon(float *data, int count)
+{
+  traceMQ().publish(data, count);
+}
