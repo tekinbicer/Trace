@@ -59,7 +59,7 @@ class TraceRuntimeConfig {
         TCLAP::ValueArg<float> argDestPort(
           "", "dest-port", "Starting port of destination host", false, 5560, "int");
         TCLAP::ValueArg<std::string> argControllerHost(
-          "", "controller-ip", "Controller host/ip address", false, "cooleylogin2", 
+          "", "controller-ip", "Controller host/ip address", false, "cooleylogin1", 
             "string");
         TCLAP::ValueArg<float> argControllerPort(
           "", "controller-port", "Controller port number", false, 3999, "int");

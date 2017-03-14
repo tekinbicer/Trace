@@ -18,24 +18,28 @@ TraceMQ::TraceMQ(
     state_ {TMQ_State::DATA},  /// Initial state is expecting DATA
     seq_ {0}
 {
-  std::string addr("tcp://" + r_dest_ip_ + ":" + 
+  std::string addrc("tcp://" + r_dest_ip_ + ":" + 
     std::to_string(static_cast<long long>(r_dest_port_+comm_rank_)));
-  std::cout << "[" << comm_rank_ << "] Destination address=" << addr << std::endl;
+  std::cout << "[" << comm_rank_ << "] Destination address=" << addrc << std::endl;
 
   context = zmq_ctx_new();
   /// setup the socket for data acquisition process
   server = zmq_socket(context, ZMQ_REQ); 
-  zmq_connect(server, addr.c_str()); 
+  zmq_connect(server, addrc.c_str()); 
 
   /// Setup sockets with controller process
   // PUB
-  addr = std::string("tcp://*:" + l_publisher_port_);
+  std::string addr("tcp://*:" + std::to_string(static_cast<long long>(l_publisher_port_)));
+  std::cout << "[" << comm_rank_ << "] Local publisher address=" << addr << std::endl;
   publisher = zmq_socket (context, ZMQ_PUB);
   int rc = zmq_bind (publisher, addr.c_str()); assert (rc == 0);
 
   // REQ
+  std::string addrcc("tcp://" + r_controller_ip_ + ":" + 
+    std::to_string(static_cast<long long>(r_controller_port_)));
+  std::cout << "[" << comm_rank_ << "] Destination controller address=" << addrcc << std::endl;
   controller = zmq_socket(context, ZMQ_REQ); 
-  zmq_connect(controller, addr.c_str()); 
+  zmq_connect(controller, addrcc.c_str()); 
 }
 
 char* TraceMQ::MyHostname(){
@@ -48,7 +52,6 @@ char* TraceMQ::MyHostname(){
   /// h->h_name has the full hostname address
   sprintf(hostname, "%s", h->h_name);
   printf("My hostname is %s\n", hostname);
-  free(h);
 
   return hostname;
 }
@@ -80,9 +83,9 @@ void TraceMQ::Initialize() {
   char *message= (char*) malloc(m_size);   /// FIXME:Constant message size
   memset((void*)message, '\0', m_size);
   char *hname = MyHostname();
-  sprintf(message, "%s;%u;%u;%u;%u;", hname, comm_rank_, 
-          metadata().beg_sinogram, metadata().tn_sinograms, 
-          metadata().n_rays_per_proj_row);
+  sprintf(message, "%s;%u;%u;%u;%u;%u;%u;", hname, comm_rank_, comm_size_, 
+          metadata().beg_sinogram, metadata().n_sinograms, 
+          metadata().tn_sinograms, metadata().n_rays_per_proj_row);
   free(hname);
   zmq_send(controller, message, m_size, 0);
   free(message);
