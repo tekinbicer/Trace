@@ -1,6 +1,8 @@
 #include <cstring>
 #include <cassert>
 #include <netdb.h>
+#include <iostream>
+#include <sstream>
 #include "trace_mq.h"
 
 TraceMQ::TraceMQ(
@@ -83,7 +85,8 @@ void TraceMQ::Initialize() {
   char *message= (char*) malloc(m_size);   /// FIXME:Constant message size
   memset((void*)message, '\0', m_size);
   char *hname = MyHostname();
-  sprintf(message, "%s;%u;%u;%u;%u;%u;%u;", hname, comm_rank_, comm_size_, 
+  sprintf(message, "%s;%u;%u;%u;%u;%u;%u;%u;", hname, 
+          l_publisher_port_, comm_rank_, comm_size_, 
           metadata().beg_sinogram, metadata().n_sinograms, 
           metadata().tn_sinograms, metadata().n_rays_per_proj_row);
   free(hname);
@@ -279,16 +282,23 @@ void TraceMQ::free_msg(tomo_msg_t *msg) {
 
 void TraceMQ::publish(float *data, int count){
   /// Prepare envelop 
-  zmq_msg_t zmsg_env;
-  int rc = zmq_msg_init_size(&zmsg_env, sizeof(int)); assert(rc==0);
-  memcpy((void*)zmq_msg_data(&zmsg_env), (void*)metadata().beg_sinogram, sizeof(uint32_t));
-  rc = zmq_msg_send(&zmsg_env, publisher, ZMQ_SNDMORE);
+  //zmq_msg_t zmsg_env;
+  std::ostringstream label;
+  label << metadata().beg_sinogram;
+  //int rc = zmq_msg_init_size(&zmsg_env, label.str().size()); assert(rc==0);
+  //memcpy( (void*)zmq_msg_data(&zmsg_env), 
+  //        (void*)(label.str().data()), label.str().size());
+  //rc = zmq_send(publisher, &zmsg_env, label.str().size(), ZMQ_SNDMORE);
+  int rc = zmq_send(publisher, label.str().c_str(), label.length(), ZMQ_SNDMORE);
+  std::cout << "Sending img size=" << count << std::endl;
+  std::cout << "label size=" << label.str().length() << std::endl;
 
   /// Prepare and send the data with envelop
   zmq_msg_t zmsg;
   size_t data_size = sizeof(*data)*count;
   rc = zmq_msg_init_size(&zmsg, count*sizeof(float)); assert(rc==0);
   memcpy((void*)zmq_msg_data(&zmsg), (void*)data, data_size);
-  rc = zmq_msg_send(&zmsg, publisher, ZMQ_DONTWAIT); assert(rc==(int)data_size);  /// Non-blocking
-  //rc = zmq_msg_send(&zmsg, publisher, 0); assert(rc==(int)data_size); /// Blocking
+  //rc = zmq_msg_send(&zmsg, publisher, ZMQ_DONTWAIT); assert(rc==(int)data_size);  /// Non-blocking
+  rc = zmq_msg_send(&zmsg, publisher, 0); assert(rc==(int)data_size); /// Blocking
+  //rc = zmq_send(publisher, data, data_size, 0);
 }
