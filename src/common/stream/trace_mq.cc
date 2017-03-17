@@ -289,7 +289,7 @@ void TraceMQ::publish(float *data, int count){
   //memcpy( (void*)zmq_msg_data(&zmsg_env), 
   //        (void*)(label.str().data()), label.str().size());
   //rc = zmq_send(publisher, &zmsg_env, label.str().size(), ZMQ_SNDMORE);
-  int rc = zmq_send(publisher, label.str().c_str(), label.length(), ZMQ_SNDMORE);
+  int rc = zmq_send(publisher, label.str().c_str(), label.str().length(), ZMQ_SNDMORE);
   std::cout << "Sending img size=" << count << std::endl;
   std::cout << "label size=" << label.str().length() << std::endl;
 

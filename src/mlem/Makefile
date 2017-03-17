@@ -7,8 +7,8 @@ ROOTDIR = ../../
 BINDIR = ${ROOTDIR}/bin/
 
 # Flags
-CFLAGS = -O0 -Wall -Wextra -std=c++11 
-CFLAGS += -g -fPIC -DTIMERON 
+CFLAGS = -O3 -Wall -Wextra -std=c++11 
+CFLAGS += -fPIC -DTIMERON 
 #CFLAGS += -no-inline-factor -no-inline-max-size  # didn't help
 
 # Common data structures and utilities classes
