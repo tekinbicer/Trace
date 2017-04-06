@@ -15,19 +15,18 @@ COMMONDIR = $(ROOTDIR)/src/common
 # DISP Framework src dir
 DISPDIR = $(COMMONDIR)/DISP/core
 
+HDF5_HOME=/local
 HDF5INC = ${HDF5_HOME}/include
 HDF5LIB = ${HDF5_HOME}/lib
-MPIINC = ${MPI_HOME}/include
-MPILIB = ${MPI_HOME}/lib
 
-LIBS = -lz -lm -lmpich -lhdf5 -lpthread
-LIBDIRS = -L$(HDF5LIB)
-INCLUDES = -I$(DISPDIR) -I$(COMMONDIR) -I$(HDF5INC) -I$(MPIINC)
+LIBS = -lhdf5 -lmpich # -lpthread
+LIBDIRS = -L$(HDF5LIB) -L/usr/lib64/mpich-3.2/lib
+INCLUDES = -I$(DISPDIR) -I$(COMMONDIR) -I$(HDF5INC) -I/usr/include/mpich-3.2-x86_64
 
 # Executable/reconstruction objects
 TRACE_OBJS = trace.o
 RECON_OBJS =  #sirt.o # Reconstruction codes
-COMMON_OBJS = trace_utils.o trace_h5io.o 
+COMMON_OBJS = trace_utils.o trace_h5io.o trace_runtime_config.o trace_engine.o trace_ph5io.o
 
 # Executables
 PROGS = trace
@@ -38,7 +37,7 @@ all: $(PROGS)
 
 # Trace
 trace: $(TRACE_OBJS) $(COMMON_OBJS) $(RECON_OBJS)
-	$(CC) $(CFLAGS) -o $@ $(TRACE_OBJS) $(COMMON_OBJS) $(RECON_OBJS) $(LIBDIRS) $(LIBS)
+	$(CC) $(CFLAGS) -o $@ $(TRACE_OBJS) $(RECON_OBJS) $(COMMON_OBJS) $(LIBDIRS) $(LIBS)
 
 trace.o: trace.cc
 	$(CC) $(CFLAGS)  -c trace.cc $(INCLUDES)
@@ -48,7 +47,12 @@ trace_h5io.o: $(COMMONDIR)/trace_h5io.cc $(COMMONDIR)/trace_h5io.h
 
 trace_utils.o: $(COMMONDIR)/trace_utils.cc $(COMMONDIR)/trace_utils.h
 	$(CC) $(CFLAGS) -c $(COMMONDIR)/trace_utils.cc $(INCLUDES)
-
+trace_runtime_config.o: trace_runtime_config.cc trace_runtime_config.h
+	$(CC) $(CFLAGS) -c trace_runtime_config.cc $(INCLUDES)
+trace_engine.o: trace_engine.cc trace_engine.h
+	$(CC) $(CFLAGS) -c trace_engine.cc $(INCLUDES)
+trace_ph5io.o: trace_ph5io.cc trace_ph5io.h
+	$(CC) $(CFLAGS) -c trace_ph5io.cc $(INCLUDES)
 install:
 	mv $(PROGS) $(BINDIR)
 
