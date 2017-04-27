@@ -28,6 +28,8 @@ class TraceRuntimeConfig {
     bool degree_to_radian=false;
 
     TraceRuntimeConfig(int argc, char **argv);
+
+    void Print();
 };
 
 #endif /// TRACE_COMMON_TRACERUNTIMECONFIG_H

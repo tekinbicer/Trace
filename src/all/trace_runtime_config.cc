@@ -1,5 +1,34 @@
 #include "trace_runtime_config.h"
 
+void TraceRuntimeConfig::Print() {
+    std::cout << "Reconstruction algorithm=" << kReconstructionAlg << 
+      std::endl;
+    std::cout << "Projection file path=" << kProjectionFilePath << 
+      std::endl;
+    std::cout << "Projection dataset path in hdf5=" << 
+      kProjectionDatasetPath << std::endl;
+    std::cout << "Theta file path=" << kThetaFilePath << std::endl;
+    std::cout << "Theta dataset path=" << kThetaDatasetPath << std::endl;
+    std::cout << "Output file path=" << kOutputFilePath << std::endl;
+    std::cout << "Recon. dataset path=" << kOutputDatasetPath << std::endl;
+    std::cout << "Number of iterations=" << iteration_count << std::endl;
+    std::cout << "Center value=" << center << std::endl;
+    std::cout << "Number of threads per process=" << thread_count << 
+      std::endl;
+    std::cout << "Degree to radian=" << degree_to_radian  << 
+      std::endl;
+    if(kReconstructionAlg=="pml" ||
+        kReconstructionAlg=="apmlr"){
+      std::cout << "Beta 0=" << b0 << std::endl;
+    }
+    if(kReconstructionAlg=="apmlr"){
+      std::cout << "Beta 1=" << b1 << std::endl;
+      std::cout << "Delta 0=" << d0 << std::endl;
+      std::cout << "Delta 1=" << d1 << std::endl;
+      std::cout << "Regw=" << regw << std::endl;
+    }
+}
+
 TraceRuntimeConfig::TraceRuntimeConfig(int argc, char **argv)
 {
   try
@@ -126,32 +155,6 @@ TraceRuntimeConfig::TraceRuntimeConfig(int argc, char **argv)
     regw = argRegw.getValue();
     degree_to_radian = argDegreeToRadian.getValue();
 
-    std::cout << "Reconstruction algorithm=" << kReconstructionAlg << 
-      std::endl;
-    std::cout << "Projection file path=" << kProjectionFilePath << 
-      std::endl;
-    std::cout << "Projection dataset path in hdf5=" << 
-      kProjectionDatasetPath << std::endl;
-    std::cout << "Theta file path=" << kThetaFilePath << std::endl;
-    std::cout << "Theta dataset path=" << kThetaDatasetPath << std::endl;
-    std::cout << "Output file path=" << kOutputFilePath << std::endl;
-    std::cout << "Recon. dataset path=" << kOutputDatasetPath << std::endl;
-    std::cout << "Number of iterations=" << iteration_count << std::endl;
-    std::cout << "Center value=" << center << std::endl;
-    std::cout << "Number of threads per process=" << thread_count << 
-      std::endl;
-    std::cout << "Degree to radian=" << degree_to_radian  << 
-      std::endl;
-    if(argReconstructionAlg.getValue()=="pml" ||
-        argReconstructionAlg.getValue()=="apmlr"){
-      std::cout << "Beta 0=" << b0 << std::endl;
-    }
-    if(argReconstructionAlg.getValue()=="apmlr"){
-      std::cout << "Beta 1=" << b1 << std::endl;
-      std::cout << "Delta 0=" << d0 << std::endl;
-      std::cout << "Delta 1=" << d1 << std::endl;
-      std::cout << "Regw=" << regw << std::endl;
-    }
   }
   catch (TCLAP::ArgException &e)
   {

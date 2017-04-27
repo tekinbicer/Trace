@@ -13,7 +13,7 @@ CFLAGS += -g -fPIC -DTIMERON
 # Common data structures and utilities classes
 COMMONDIR = $(ROOTDIR)/src/common
 # DISP Framework src dir
-DISPDIR = $(COMMONDIR)/DISP/core
+DISPDIR = $(COMMONDIR)/disp
 
 HDF5_HOME=/local
 HDF5INC = ${HDF5_HOME}/include

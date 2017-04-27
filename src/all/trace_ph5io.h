@@ -39,7 +39,7 @@ class TracePH5IO {
 
     TraceData Read();
 
-    void Write();
+    void Write(TraceData &trace_data);
 };
 
 #endif // TRACE_COMMON_TRACEPH5IO_H

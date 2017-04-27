@@ -95,3 +95,32 @@ TraceData TracePH5IO::Read(){
   return trace_data;
 }
 
+void TracePH5IO::Write(TraceData &trace_data){
+  hsize_t ndims = 3;
+  hsize_t rank_dims[3] = {
+    static_cast<hsize_t>(trace_data.metadata().num_slices()),
+    static_cast<hsize_t>(trace_data.metadata().num_cols()),
+    static_cast<hsize_t>(trace_data.metadata().num_cols())
+  };
+  hsize_t app_dims[3] = {
+    static_cast<hsize_t>(trace_data.metadata().num_total_slices()),
+    static_cast<hsize_t>(trace_data.metadata().num_cols()),
+    static_cast<hsize_t>(trace_data.metadata().num_cols())
+  };
+
+  ADataRegion<float> &recon = trace_data.metadata().recon();
+
+  int recon_slice_data_index =
+    trace_data.metadata().num_neighbor_recon_slices()*
+    trace_data.metadata().num_grids() * trace_data.metadata().num_grids();
+
+  trace_io::WriteData(
+    &recon[recon_slice_data_index],
+    ndims, rank_dims, trace_data.metadata().slice_id(),
+    ndims, app_dims, 
+    0,
+    outputFilePath.c_str(), outputDatasetPath.c_str(),
+    MPI_COMM_WORLD, MPI_INFO_NULL, H5FD_MPIO_COLLECTIVE);
+}
+
+

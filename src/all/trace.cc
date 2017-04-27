@@ -13,6 +13,7 @@ int main(int argc, char **argv)
 {
   /* Parse command line parameters */
   TraceRuntimeConfig config(argc, argv);
+  config.Print();
 
   /* Initiate middleware's communication layer */
   DISPCommMPI<float> comm(&argc, &argv);
@@ -25,6 +26,6 @@ int main(int argc, char **argv)
 
   trace_engine.IterativeReconstruction();
 
-  //trace_io.Write(trace_engine.image(), trace_data);
+  trace_io.Write(trace_data);
 }
 
