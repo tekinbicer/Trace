@@ -25,7 +25,7 @@ INCLUDES = -I$(DISPDIR) -I$(COMMONDIR) -I$(HDF5INC) -I/usr/include/mpich-3.2-x86
 
 # Executable/reconstruction objects
 TRACE_OBJS = trace.o
-RECON_OBJS =  sirt.o mlem.o # Reconstruction codes
+RECON_OBJS =  sirt.o mlem.o pml.o # Reconstruction codes
 COMMON_OBJS = trace_utils.o trace_h5io.o trace_runtime_config.o trace_engine.o trace_ph5io.o
 
 # Executables
@@ -40,7 +40,7 @@ trace: $(TRACE_OBJS) $(COMMON_OBJS) $(RECON_OBJS)
 	$(CC) $(CFLAGS) -o $@ $(TRACE_OBJS) $(RECON_OBJS) $(COMMON_OBJS) $(LIBDIRS) $(LIBS)
 
 trace.o: trace.cc
-	$(CC) $(CFLAGS)  -c trace.cc $(INCLUDES)
+	$(CC) $(CFLAGS) -c trace.cc $(INCLUDES)
 
 trace_h5io.o: $(COMMONDIR)/trace_h5io.cc $(COMMONDIR)/trace_h5io.h
 	$(CC) $(CFLAGS) -c $(COMMONDIR)/trace_h5io.cc $(INCLUDES)
@@ -58,6 +58,8 @@ sirt.o: sirt.cc sirt.h
 	$(CC) $(CFLAGS) -c sirt.cc $(INCLUDES)
 mlem.o: mlem.cc mlem.h
 	$(CC) $(CFLAGS) -c mlem.cc $(INCLUDES)
+pml.o: pml.cc pml.h
+	$(CC) $(CFLAGS) -c pml.cc $(INCLUDES)
 
 install:
 	mv $(PROGS) $(BINDIR)

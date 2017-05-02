@@ -1,3 +1,6 @@
+#ifndef TRACE_SRC_PML_H_
+#define TRACE_SRC_PML_H_
+
 #include "recon_space.h"
 #include "trace_data.h"
 #include "trace_utils.h"
@@ -22,246 +25,30 @@ class PMLDataRegion final : public DataRegionBase<float, TraceMetadata>{
     PMLDataRegion(
         float *data, 
         size_t count, 
-        TraceMetadata *metadata): 
-      DataRegionBase<float, TraceMetadata>(data, count, metadata) 
-    {
-      size_t count_i = 
-        metadata->num_slices()*metadata->num_grids()*metadata->num_grids();
-      F_ = new float[count_i];
-      G_ = new float[count_i];
-      SetFG(0.);
-    }
+        TraceMetadata *metadata);
 
-    PMLDataRegion(DataRegionBase<float, TraceMetadata> &region) :
-      PMLDataRegion(&region[0], region.count(), &region.metadata())
-    { }
+    PMLDataRegion(DataRegionBase<float, TraceMetadata> &region);
 
-    virtual ~PMLDataRegion(){
-      delete [] F_;
-      delete [] G_;
-    }
+    virtual ~PMLDataRegion();
 
-    void SetFG(float val)
-    {
-      size_t count = 
-        metadata().num_slices()*metadata().num_grids()*metadata().num_grids();
-      for(size_t i=0; i<count; ++i){
-        F_[i]=val;
-        G_[i]=val;
-      }
-    }
+    void SetFG(float val);
 
-    float* F() const { return F_; };
-    float* G() const { return G_; };
+    float* F() const;
+    float* G() const;
 };
 
 class PMLReconSpace final : public AReconSpace
 {
   public:
-    PMLReconSpace(int rows, int cols) :
-      AReconSpace(rows, cols) {};
+    PMLReconSpace(int rows, int cols);
 
     void UpdateRecon(
-        ADataRegion<float> &slices_,                      // Input slices, metadata, recon
-        DataRegion2DBareBase<float> &comb_replica)  // Locally combined replica
-    {
-      PMLDataRegion &slices = dynamic_cast<PMLDataRegion&>(slices_);
-      auto &recon = slices.metadata().recon();
-      size_t rows = comb_replica.rows();
-      size_t cols = comb_replica.cols()/2;
-
-      float *F = slices.F();
-      float *G = slices.G();
-
-      for(size_t i=0; i<rows; ++i){
-        auto replica = comb_replica[i];
-        for(size_t j=0; j<cols; ++j){
-          size_t index = (i*cols) + j;
-          recon[index] =
-            (-G[index] + sqrt(G[index]*G[index] - 8*replica[j*2]*F[index])) /
-              (4*F[index]);
-        }
-      }
-    }
+        ADataRegion<float> &slices_,                 // Input slices, metadata, recon
+        DataRegion2DBareBase<float> &comb_replica);  // Locally combined replica
 
     void CalculateFG(
         ADataRegion<float> &slices_,
-        float beta)
-    {
-      PMLDataRegion &slices = dynamic_cast<PMLDataRegion&>(slices_); 
-      int num_slices = slices.metadata().num_slices();
-      int num_grids = slices.metadata().num_grids();
-
-      ADataRegion<float> &recon = slices.metadata().recon();
-      float *F = slices.F();
-      float *G = slices.G();
-
-      int k, n, m, q, i;
-      int ind0, indg[8];
-
-      /// (inner region)
-      const float *wg = slices.kWeightIn;
-      for (k = 0; k < num_slices; k++) {
-        for (n = 1; n < num_grids - 1; n++) {
-          for (m = 1; m < num_grids - 1; m++) {
-            ind0 = m + n * num_grids + k * num_grids * num_grids;
-
-            indg[0] = ind0 + 1;
-            indg[1] = ind0 - 1;
-            indg[2] = ind0 + num_grids;
-            indg[3] = ind0 - num_grids;
-            indg[4] = ind0 + num_grids + 1;
-            indg[5] = ind0 + num_grids - 1;
-            indg[6] = ind0 - num_grids + 1;
-            indg[7] = ind0 - num_grids - 1;
-
-            for (q = 0; q < 8; q++) {
-              F[ind0] += 2 * beta * wg[q];
-              G[ind0] -= 2 * beta * wg[q] * (recon[ind0] + recon[indg[q]]);
-            }
-          }
-        }
-      }
-
-      /// top
-      wg = slices.kWeightEdges;
-      for (k = 0; k < num_slices; k++) {
-        for (m = 1; m < num_grids - 1; m++) {
-          ind0 = m + k * num_grids * num_grids;
-
-          indg[0] = ind0 + 1;
-          indg[1] = ind0 - 1;
-          indg[2] = ind0 + num_grids;
-          indg[3] = ind0 + num_grids + 1;
-          indg[4] = ind0 + num_grids - 1;
-
-          for (q = 0; q < 5; q++) {
-            F[ind0] += 2 * beta * wg[q];
-            G[ind0] -= 2 * beta * wg[q] * (recon[ind0] + recon[indg[q]]);
-          }
-        }
-      }
-
-      // (bottom)
-      for (k = 0; k < num_slices; k++) {
-        for (m = 1; m < num_grids - 1; m++) {
-          ind0 = m + (num_grids - 1) * num_grids + k * num_grids * num_grids;
-
-          indg[0] = ind0 + 1;
-          indg[1] = ind0 - 1;
-          indg[2] = ind0 - num_grids;
-          indg[3] = ind0 - num_grids + 1;
-          indg[4] = ind0 - num_grids - 1;
-
-          for (q = 0; q < 5; q++) {
-            F[ind0] += 2 * beta * wg[q];
-            G[ind0] -= 2 * beta * wg[q] * (recon[ind0] + recon[indg[q]]);
-          }
-        }
-      }
-
-      // (left)
-      for (k = 0; k < num_slices; k++) {
-        for (n = 1; n < num_grids - 1; n++) {
-          ind0 = n * num_grids + k * num_grids * num_grids;
-
-          indg[0] = ind0 + 1;
-          indg[1] = ind0 + num_grids;
-          indg[2] = ind0 - num_grids;
-          indg[3] = ind0 + num_grids + 1;
-          indg[4] = ind0 - num_grids + 1;
-
-          for (q = 0; q < 5; q++) {
-            F[ind0] += 2 * beta * wg[q];
-            G[ind0] -= 2 * beta * wg[q] * (recon[ind0] + recon[indg[q]]);
-          }
-        }
-      }
-
-      // (right)
-      for (k = 0; k < num_slices; k++) {
-        for (n = 1; n < num_grids - 1; n++) {
-          ind0 = (num_grids - 1) + n * num_grids + k * num_grids * num_grids;
-
-          indg[0] = ind0 - 1;
-          indg[1] = ind0 + num_grids;
-          indg[2] = ind0 - num_grids;
-          indg[3] = ind0 + num_grids - 1;
-          indg[4] = ind0 - num_grids - 1;
-
-          for (q = 0; q < 5; q++) {
-            F[ind0] += 2 * beta * wg[q];
-            G[ind0] -= 2 * beta * wg[q] * (recon[ind0] + recon[indg[q]]);
-          }
-        }
-      }
-
-      // (top-left)
-      wg = slices.kWeightCorners;
-      for (k = 0; k < num_slices; k++) {
-        ind0 = k * num_grids * num_grids;
-
-        indg[0] = ind0 + 1;
-        indg[1] = ind0 + num_grids;
-        indg[2] = ind0 + num_grids + 1;
-
-        for (q = 0; q < 3; q++) {
-          F[ind0] += 2 * beta * wg[q];
-          G[ind0] -= 2 * beta * wg[q] * (recon[ind0] + recon[indg[q]]);
-        }
-      }
-
-      // (top-right)
-      for (k = 0; k < num_slices; k++) {
-        ind0 = (num_grids - 1) + k * num_grids * num_grids;
-
-        indg[0] = ind0 - 1;
-        indg[1] = ind0 + num_grids;
-        indg[2] = ind0 + num_grids - 1;
-
-        for (q = 0; q < 3; q++) {
-          F[ind0] += 2 * beta * wg[q];
-          G[ind0] -= 2 * beta * wg[q] * (recon[ind0] + recon[indg[q]]);
-        }
-      }
-
-      // (bottom-left)
-      for (k = 0; k < num_slices; k++) {
-        ind0 = (num_grids - 1) * num_grids + k * num_grids * num_grids;
-
-        indg[0] = ind0 + 1;
-        indg[1] = ind0 - num_grids;
-        indg[2] = ind0 - num_grids + 1;
-
-        for (q = 0; q < 3; q++) {
-          F[ind0] += 2 * beta * wg[q];
-          G[ind0] -= 2 * beta * wg[q] * (recon[ind0] + recon[indg[q]]);
-        }
-      }
-
-      // (bottom-right)
-      for (k = 0; k < num_slices; k++) {
-        ind0 = (num_grids - 1) + (num_grids - 1) * num_grids +
-               k * num_grids * num_grids;
-
-        indg[0] = ind0 - 1;
-        indg[1] = ind0 - num_grids;
-        indg[2] = ind0 - num_grids - 1;
-
-        for (q = 0; q < 3; q++) {
-          F[ind0] += 2 * beta * wg[q];
-          G[ind0] -= 2 * beta * wg[q] * (recon[ind0] + recon[indg[q]]);
-        }
-      }
-
-      int count = num_grids*num_grids;
-      for (i=0; i<num_slices; i++) {
-        float *suma = &reduction_objects()[i][0];
-        for (int j=0; j<count; j++) {
-          G[i*count+j] += suma[j*2+1];
-        }
-      }
-    }
+        float beta);
 
     void UpdateReconReplica(
         float simdata,
@@ -270,22 +57,7 @@ class PMLReconSpace final : public AReconSpace
         int curr_slice,
         int const * const indi,
         float *leng, 
-        int len)
-    {
-      auto &slice_t = reduction_objects()[curr_slice];
-      auto slice = &slice_t[0];
-
-      float upd = ray/simdata;
-      for (int i=0; i <len-1; ++i) {
-    #ifdef PREFETCHON
-        size_t indi2 = indi[i+32];
-        size_t index2 = indi2*2;
-        __builtin_prefetch(recon+indi2,1,0);
-        __builtin_prefetch(slice+index2,1,0);
-    #endif
-        size_t index = indi[i]*2;
-        slice[index] -= recon[indi[i]]*leng[i]*upd;
-        slice[index+1] += leng[i];
-      }
-    }
+        int len);
 };
+
+#endif

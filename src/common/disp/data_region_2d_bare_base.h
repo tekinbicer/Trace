@@ -24,98 +24,40 @@ class DataRegion2DBareBase {
     size_t cols_;
 
   public:
-    DataRegion2DBareBase(size_t rows, size_t cols){
-      regions_.reserve(rows);
+    DataRegion2DBareBase(size_t rows, size_t cols);
 
-      for(size_t i=0; i<rows; i++)
-        regions_.push_back(new DataRegionBareBase<T>(cols));
-
-      rows_ = rows;
-      cols_ = cols;
-    }
-
-    ~DataRegion2DBareBase(){
-      for(auto &region : regions_)
-        delete region;
-      rows_ = 0;
-      cols_ = 0;
-    }
+    ~DataRegion2DBareBase();
 
     /* Copy constructor */
-    DataRegion2DBareBase(const DataRegion2DBareBase &dr){
-      regions_.reserve(dr.rows());
-
-      for(auto t : dr.regions()){
-        auto r = new DataRegionBareBase<T>(*t);
-        regions_.push_back(r);
-      }
-
-      rows_ = dr.rows();
-      cols_ = dr.cols();
-    }
+    DataRegion2DBareBase(const DataRegion2DBareBase &dr);
 
     /* Copy assignment */
-    DataRegion2DBareBase<T>& operator=(const DataRegion2DBareBase &dr){
-      if(this==&dr) return *this;
-
-      for(auto rg : regions_)
-        delete rg;
-
-      regions_.clear();
-      regions_.reserve(dr.rows());
-
-      for(auto rg : dr.regions())
-        regions_.push_back(new DataRegionBareBase<T>(*rg));
-      rows_ = dr.rows();
-      cols_ = dr.cols();
-
-      return *this;
-    }
+    DataRegion2DBareBase<T>& operator=(const DataRegion2DBareBase &dr);
 
     /* TODO: Move constructor & assignment */
 
-    DataRegionBareBase<T>& operator[](size_t row) const { 
-      return *(regions_[row]); 
-    }
+    DataRegionBareBase<T>& operator[](size_t row) const; 
 
-    const std::vector<DataRegionBareBase<T>*>& regions() const { return regions_; };
-    size_t num_rows() const { return rows_; }
-    size_t num_cols() const { return cols_; }
-    size_t rows() const { return rows_; }
-    size_t cols() const { return cols_; }
-    size_t count() const { return rows_*cols_; }
-    size_t size() const {return rows_*cols_*sizeof(T); }
+    const std::vector<DataRegionBareBase<T>*>& regions() const;
+    size_t num_rows() const;
+    size_t num_cols() const;
+    size_t rows() const;
+    size_t cols() const;
+    size_t count() const;
+    size_t size() const;
 
 
-    T& item(size_t row, size_t col) const {
-      if(row >= rows_ || col >= cols_)
-        throw std::out_of_range("Tried to access out of range offset!");
-      return (*regions_[row])[col];
-    }
+    T& item(size_t row, size_t col) const; 
 
-    void item(size_t row, size_t col, T &val) const {
-      if(row >= rows_ || col >= cols_)
-        throw std::out_of_range("Tried to access out of range offset!");
-      (*regions_[row])[col] = val;
-    }
+    void item(size_t row, size_t col, T &val) const;
 
-    void ResetAllItems(T &val) const {
-      for(size_t i=0; i<rows_; i++)
-        for(size_t j=0; j<cols_; j++)
-          (*regions_[i])[j] = val;
-    }
+    void ResetAllItems(T &val) const;
 
-    void ResetAllMirroredRegions(){
-      for(size_t i=0; i<rows_; i++)
-        (*regions_[i]).ResetMirroredRegionIter();
-    }
-
-    void copy(DataRegion2DBareBase<T> &dr){
-      if(dr.rows() != rows_ || dr.cols() != cols_)
-        throw std::out_of_range("DataRegions' ranges do not overlap!");
-
-      dr = *this;
-    }
+    void ResetAllMirroredRegions();
+   
+    void copy(DataRegion2DBareBase<T> &dr);
 };
+
+#include "data_region_2d_bare_base.inl"
 
 #endif    // DISP_SRC_DISP_DATA_REGION_2D_BARE_BASE_H

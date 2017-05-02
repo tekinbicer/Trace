@@ -20,34 +20,20 @@ class MirroredRegionBase : public MirroredRegionBareBase<T> {
     I * const metadata_;
 
   public:
-    virtual ~MirroredRegionBase() {}
+    virtual ~MirroredRegionBase();
 
-    explicit MirroredRegionBase(MirroredRegionBase<T, I> &region)
-      : MirroredRegionBareBase<T>(region)
-      , metadata_{region.metadata_}
-    {
-      if(metadata_ == nullptr)
-        throw std::invalid_argument("Metadata pointer cannot be null!");
-    }
+    explicit MirroredRegionBase(MirroredRegionBase<T, I> &region);
 
     explicit MirroredRegionBase(
         ADataRegion<T> const * const parent, 
         T * const data, size_t count, size_t index, 
-        I * const metadata)
-      : MirroredRegionBareBase<T>(parent, data, count, index)
-      , metadata_{metadata}
-    {
-      if(metadata == nullptr)
-        throw std::invalid_argument("Metadata pointer cannot be null!");
-    }
+        I * const metadata);
 
-    I& metadata() const { return *metadata_; }
+    I& metadata() const;
 
-    virtual MirroredRegionBase<T, I>* Clone(){
-      MirroredRegionBase<T, I> *mirror = 
-        new MirroredRegionBase<T, I>(*this);
-      return mirror;
-    }
+    virtual MirroredRegionBase<T, I>* Clone();
 };
+
+#include "mirrored_region_base.inl"
 
 #endif    // DISP_SRC_DISP_MIRRORED_REGION_BASE_H

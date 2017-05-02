@@ -20,101 +20,29 @@ class DataRegionBase : public ADataRegion<T> {
   protected:
     I *metadata_ = nullptr;
 
-    virtual MirroredRegionBase<T, I>* MirrorRegion(const size_t index, const size_t count)
-    {
-      if(index+count > ADataRegion<T>::count()) 
-        throw std::out_of_range("Mirrored region is out of range!");
-
-      MirroredRegionBase<T, I> *mirrored_region = 
-        new MirroredRegionBase<T, I>(
-            this, 
-            &ADataRegion<T>::operator[](0)+index, 
-            count, 
-            index, 
-            metadata_);
-      ADataRegion<T>::mirrored_regions_.push_back(mirrored_region);
-
-      return mirrored_region;
-    }
+    virtual MirroredRegionBase<T, I>* MirrorRegion(const size_t index, const size_t count);
 
   public:
 
-    /* Constructors */
-    explicit DataRegionBase(const size_t count, I * const metadata)
-      : ADataRegion<T>(count)
-      , metadata_{metadata}
-    {}
+    /** Constructors */
+    explicit DataRegionBase(const size_t count, I * const metadata);
+    explicit DataRegionBase(T * const data, const size_t count, I * const metadata);
+    DataRegionBase(const ADataRegion<T> &region);
+    DataRegionBase(ADataRegion<T> &&region);
 
-    explicit DataRegionBase(T * const data, const size_t count, I * const metadata)
-      : ADataRegion<T>(data, count)
-      , metadata_{metadata}
-    {}
+    /** Assignments */
+    DataRegionBase<T, I>& operator=(const ADataRegion<T> &region);
+    DataRegionBase<T, I>& operator=(const ADataRegion<T> &&region);
 
-    DataRegionBase(const ADataRegion<T> &region)
-      : ADataRegion<T>(region)
-    {
-      DataRegionBase<T, I> *dr = dynamic_cast<DataRegionBase<T, I>*>(&region);
-      if(dr != nullptr) metadata_ = dr->metadata_;
-    }
+    /** Accessors/Mutators */
+    I& metadata() const;
 
-    DataRegionBase(ADataRegion<T> &&region)
-      : ADataRegion<T>(std::move(region))
-    {
-      DataRegionBase<T, I> *dr = dynamic_cast<DataRegionBase<T, I>*>(&region);
-      if(dr != nullptr){
-        metadata_ = dr->metadata_;
-        dr->metadata_ = nullptr;
-      }
-      ADataRegion<T>::operator=(std::move(region));
-    }
+    /** Mirrored region functions */
+    virtual MirroredRegionBareBase<T>* NextMirroredRegion(const size_t count);
 
-    /* Assignments */
-    DataRegionBase<T, I>& operator=(const ADataRegion<T> &region)
-    {
-      DataRegionBase<T, I> *dr = dynamic_cast<DataRegionBase<T, I>*>(&region);
-      if(dr != nullptr) metadata_ = dr->metadata_;
-      ADataRegion<T>::operator=(region);
-
-      return *this;
-    }
-    DataRegionBase<T, I>& operator=(const ADataRegion<T> &&region)
-    {
-      DataRegionBase<T, I> *dr = dynamic_cast<DataRegionBase<T, I>*>(&region);
-      if(dr != nullptr){
-        metadata_ = dr->metadata_;
-        dr->metadata_ = nullptr;
-      }
-      ADataRegion<T>::operator=(std::move(region));
-
-      return *this;
-    }
-
-    /* Accessors/Mutators */
-    I& metadata() const { return *metadata_; };
-
-    /** 
-     * Behavioral functions
-     */
-    virtual MirroredRegionBareBase<T>* NextMirroredRegion(const size_t count)
-    {
-      if(ADataRegion<T>::index_ >= ADataRegion<T>::count())
-        return nullptr;
-
-      size_t num_units = 
-        (ADataRegion<T>::index_+count > ADataRegion<T>::count()) ? 
-          (ADataRegion<T>::count() - ADataRegion<T>::index_) : count;
-
-      auto region = MirrorRegion(ADataRegion<T>::index_, num_units);
-      ADataRegion<T>::index_ += num_units;
-
-      return region;
-    }
-
-    virtual ADataRegion<T>* Clone()
-    {
-      ADataRegion<T> *region = new DataRegionBase<T, I>(*this);
-      return region;
-    }
+    virtual ADataRegion<T>* Clone();
 };
+
+#include "data_region_base.inl"
 
 #endif    // DISP_SRC_DISP_DATA_REGION_BARE_BASE_H
