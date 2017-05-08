@@ -1,69 +1,71 @@
 #include "recon_space.h"
-#include "sirt.h"
 
-SIRTReconSpace::SIRTReconSpace(int rows, int cols) : 
-  AReconSpace(rows, cols) 
+// Forward projection
+float AReconSpace::CalculateSimdata(
+    float *recon,
+    int len,
+    int *indi,
+    float *leng) 
+{
+  float simdata = 0.;
+  for(int i=0; i<len-1; ++i){
+#ifdef PREFETCHON
+    size_t index = indi[i+32];
+    __builtin_prefetch(&(recon[index]),1,0);
+#endif
+    simdata += recon[indi[i]]*leng[i];
+  }
+  return simdata;
+}
+
+/// SIRT
+void AReconSpace::UpdateReconReplica(
+  float /* simdata */,
+  float /* ray */,
+  int /* curr_slice */,
+  int const * const /* indi */,
+  float * /* leng2 */,
+  float * /* leng */, 
+  int /* len */)
 {}
 
-void SIRTReconSpace::Initialize(int n_grids)
+/// MLEM
+void AReconSpace::UpdateReconReplica(
+  float /* simdata */,
+  float /* ray */,
+  int /* curr_slice */,
+  int const * const /* indi */,
+  float * /* leng */, 
+  int /* len */)
+{}
+
+/// PML
+void AReconSpace::UpdateReconReplica(
+  float /* simdata */,
+  float /* ray */,
+  float * /* recon */,
+  int /* curr_slice */,
+  int const * const /* indi */,
+  float * /* leng */, 
+  int /* len */)
+{}
+
+void AReconSpace::UpdateRecon(
+    ADataRegion<float> & /* recon */,
+    DataRegion2DBareBase<float> & /*comb_replica */)
+{}
+
+
+AReconSpace::AReconSpace(int rows, int cols) : 
+  AReductionSpaceBase<AReconSpace, float>(rows, cols) 
+{}
+
+AReconSpace::~AReconSpace()
 {
-  AReconSpace::Initialize(n_grids); 
-  leng2= new float[2*num_grids];
+  Finalize();
 }
 
-void SIRTReconSpace::Finalize()
-{
-  AReconSpace::Finalize();
-  delete [] leng2;
-}
-
-// Backprojection
-void SIRTReconSpace::UpdateRecon(
-    ADataRegion<float> &recon,                  // Reconstruction object
-    DataRegion2DBareBase<float> &comb_replica) {// Locally combined replica
-  size_t rows = comb_replica.rows();
-  size_t cols = comb_replica.cols()/2;
-  for(size_t i=0; i<rows; ++i){
-    auto replica = comb_replica[i];
-    for(size_t j=0; j<cols; ++j)
-      recon[i*cols + j] +=
-        replica[j*2] / replica[j*2+1];
-  }
-}
-
-
-void SIRTReconSpace::UpdateReconReplica(
-    float simdata,
-    float ray,
-    int curr_slice,
-    int const * const indi,
-    float *leng2,
-    float *leng, 
-    int len)
-{
-  float upd=0., a2=0.;
-
-  auto &slice_t = reduction_objects()[curr_slice];
-  auto slice = &slice_t[0];
-
-  for (int i=0; i<len-1; ++i)
-    a2 += leng2[i];
-
-  upd = (ray-simdata) / a2;
-
-  int i=0;
-  for (; i<(len-1); ++i) {
-#ifdef PREFETCHON
-    size_t index2 = indi[i+32]*2;
-    __builtin_prefetch(slice+index2,1,0);
-#endif
-    size_t index = indi[i]*2;
-    slice[index] += leng[i]*upd; 
-    slice[index+1] += leng[i];
-  }
-}
-
-void SIRTReconSpace::Reduce(MirroredRegionBareBase<float> &input)
+void AReconSpace::Reduce(MirroredRegionBareBase<float> &input)
 {
   auto &rays = *(static_cast<MirroredRegionBase<float, TraceMetadata>*>(&input));
   auto &metadata = rays.metadata();
@@ -131,7 +133,7 @@ void SIRTReconSpace::Reduce(MirroredRegionBareBase<float> &input)
           len, 
           num_grids, 
           coorx, coory, 
-          leng, leng2, 
+          leng,
           indi);
 
       /*******************************************************/
@@ -147,9 +149,44 @@ void SIRTReconSpace::Reduce(MirroredRegionBareBase<float> &input)
           rays[curr_col], 
           curr_slice, 
           indi, 
-          leng2, leng,
+          leng,
           len);
       /*******************************************************/
     }
   }
+}
+
+void AReconSpace::Initialize(int n_grids)
+{
+  num_grids = n_grids; 
+
+  coordx = new float[num_grids+1]; 
+  coordy = new float[num_grids+1];
+  ax = new float[num_grids+1];
+  ay = new float[num_grids+1];
+  bx = new float[num_grids+1];
+  by = new float[num_grids+1];
+  coorx = new float[2*num_grids];
+  coory = new float[2*num_grids];
+  leng = new float[2*num_grids];
+  indi = new int[2*num_grids];
+}
+
+void AReconSpace::CopyTo(AReconSpace &target)
+{
+  target.Initialize(num_grids);
+}
+
+void AReconSpace::Finalize()
+{
+  delete [] coordx;
+  delete [] coordy;
+  delete [] ax;
+  delete [] ay;
+  delete [] bx;
+  delete [] by;
+  delete [] coorx;
+  delete [] coory;
+  delete [] leng;
+  delete [] indi;
 }
