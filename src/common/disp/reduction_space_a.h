@@ -22,7 +22,7 @@ class AReductionSpaceBase{
     // deep copies
     virtual void CopyTo(CT &target)=0;
 
-    virtual CT *Clone();
+    virtual CT *Clone()=0;
 
     DataRegion2DBareBase<DT>& reduction_objects();
 

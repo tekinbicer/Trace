@@ -58,6 +58,8 @@ class PMLReconSpace final : public AReconSpace
         int const * const indi,
         float *leng, 
         int len);
+
+    virtual PMLReconSpace* Clone();
 };
 
 #endif

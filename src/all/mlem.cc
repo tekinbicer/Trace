@@ -42,3 +42,14 @@ void MLEMReconSpace::UpdateReconReplica(
 }
 
 
+MLEMReconSpace* MLEMReconSpace::Clone()
+{
+  auto &red_objs = reduction_objects();
+
+  MLEMReconSpace *cloned_obj = new MLEMReconSpace(red_objs.rows(), red_objs.cols());
+  (*cloned_obj).reduction_objects() = red_objs;
+
+  static_cast<MLEMReconSpace*>(this)->CopyTo(*cloned_obj);
+
+  return cloned_obj;
+}

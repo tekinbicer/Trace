@@ -12,6 +12,7 @@ TraceEngine::TraceEngine(TraceData &trace_data, DISPCommBase<float> &dcomm, Trac
   std::string &recon_alg = config.kReconstructionAlg;
   int thread_count = config.thread_count;
 
+  /* SIRT */
   if(recon_alg=="sirt"){
     main_recon_space= new SIRTReconSpace(
         trace_data.metadata().num_slices(), 
@@ -20,7 +21,6 @@ TraceEngine::TraceEngine(TraceData &trace_data, DISPCommBase<float> &dcomm, Trac
     float init_val=0.;
     main_recon_space->reduction_objects().ResetAllItems(init_val);
 
-    /* Prepare processing engine and main reduction space for other threads */
     engine.reset(
         new DISPEngineReduction<AReconSpace, float>(
           &comm,
@@ -28,6 +28,7 @@ TraceEngine::TraceEngine(TraceData &trace_data, DISPCommBase<float> &dcomm, Trac
           thread_count));
   }
 
+  /* MLEM */
   else if(recon_alg=="mlem"){
     trace_data.metadata().InitImage(1.);
     main_recon_space= new MLEMReconSpace(
@@ -37,7 +38,6 @@ TraceEngine::TraceEngine(TraceData &trace_data, DISPCommBase<float> &dcomm, Trac
     float init_val=0.;
     main_recon_space->reduction_objects().ResetAllItems(init_val);
 
-    /* Prepare processing engine and main reduction space for other threads */
     engine.reset(
         new DISPEngineReduction<AReconSpace, float>(
           &comm,
@@ -45,6 +45,7 @@ TraceEngine::TraceEngine(TraceData &trace_data, DISPCommBase<float> &dcomm, Trac
           thread_count));
   }
 
+  /* PML */
   else if(recon_alg=="pml"){
     trace_data.metadata().InitImage(1.);
     PMLDataRegion sinograms(  
@@ -66,6 +67,7 @@ TraceEngine::TraceEngine(TraceData &trace_data, DISPCommBase<float> &dcomm, Trac
           main_recon_space,
           thread_count));
   }
+
   else if(recon_alg=="apmlr"){
     std::cerr << "Algorithm is not ready: " << recon_alg << std::endl;
     exit(0);

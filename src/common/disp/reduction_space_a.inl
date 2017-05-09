@@ -1,10 +1,12 @@
+// Default operation is sum
+#include <thread>
+#include <sstream>
 template <typename CT, typename DT>
 void AReductionSpaceBase<CT,DT>::Process(MirroredRegionBareBase<DT> &input)
 {
   static_cast<CT*>(this)->Reduce(input);
 }
 
-// Default operation is sum
 template <typename CT, typename DT>
 void AReductionSpaceBase<CT,DT>::LocalSynchWith(CT &input_reduction_space)
 {

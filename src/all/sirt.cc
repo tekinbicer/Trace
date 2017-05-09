@@ -17,6 +17,18 @@ void SIRTReconSpace::Finalize()
   delete [] leng2;
 }
 
+SIRTReconSpace* SIRTReconSpace::Clone()
+{
+  auto &red_objs = reduction_objects();
+
+  SIRTReconSpace *cloned_obj = new SIRTReconSpace(red_objs.rows(), red_objs.cols());
+  (*cloned_obj).reduction_objects() = red_objs;
+
+  static_cast<SIRTReconSpace*>(this)->CopyTo(*cloned_obj);
+
+  return cloned_obj;
+}
+
 // Backprojection
 void SIRTReconSpace::UpdateRecon(
     ADataRegion<float> &recon,                  // Reconstruction object

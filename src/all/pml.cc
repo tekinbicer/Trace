@@ -46,6 +46,18 @@ float* PMLDataRegion::G() const { return G_; };
 PMLReconSpace::PMLReconSpace(int rows, int cols) :
   AReconSpace(rows, cols) {};
 
+PMLReconSpace* PMLReconSpace::Clone()
+{
+  auto &red_objs = reduction_objects();
+
+  PMLReconSpace *cloned_obj = new PMLReconSpace(red_objs.rows(), red_objs.cols());
+  (*cloned_obj).reduction_objects() = red_objs;
+
+  static_cast<PMLReconSpace*>(this)->CopyTo(*cloned_obj);
+
+  return cloned_obj;
+}
+
 void PMLReconSpace::UpdateRecon(
     ADataRegion<float> &slices_,                      // Input slices, metadata, recon
     DataRegion2DBareBase<float> &comb_replica)  // Locally combined replica

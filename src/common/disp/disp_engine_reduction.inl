@@ -20,6 +20,7 @@ void DISPEngineReduction<RST,DT>::ReductionWrapper(
     int &req_units)
 {
   auto output_data = PartitionWrapper(input_data, req_units);
+
   while(output_data != nullptr){
     reduction_space.Process(*output_data);
     output_data = PartitionWrapper(input_data, req_units);

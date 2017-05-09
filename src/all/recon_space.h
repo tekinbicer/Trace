@@ -81,6 +81,8 @@ class AReconSpace :
 
     virtual void CopyTo(AReconSpace &target);
 
+    virtual AReconSpace* Clone()=0;
+
     virtual void Finalize();
 };
 

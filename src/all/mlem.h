@@ -21,6 +21,8 @@ class MLEMReconSpace final : public AReconSpace
         int const * const indi,
         float *leng, 
         int len);
+
+    virtual MLEMReconSpace* Clone();
 };
 
 #endif
