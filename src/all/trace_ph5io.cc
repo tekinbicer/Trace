@@ -71,7 +71,6 @@ TraceData TracePH5IO::Read(){
   if(degree_to_radian) trace_utils::DegreeToRadian(*theta);
 
   /* Setup metadata data structure */
-  // INFO: TraceMetadata destructor frees theta->data!
   // TraceMetadata internally creates reconstruction object
   trace_data.metadata( new TraceMetadata(
         static_cast<float *>(theta->data),  /// float const *theta,
@@ -85,12 +84,21 @@ TraceData TracePH5IO::Read(){
         input_slice->metadata->dims[2],     /// int const num_grids,
         center));         /// float const center
 
+  delete [] t_metadata->dims;
+  delete t_metadata;
+  delete [] static_cast<char*>(theta->data);
+  delete theta;
+
   // INFO: DataRegionBase destructor deletes input_slice.data pointer
   trace_data.sinograms( 
       new DataRegionBase<float, TraceMetadata>(
         static_cast<float *>(input_slice->data),
         trace_data.metadata().count(),
         &trace_data.metadata()));
+
+  delete [] d_metadata->dims;
+  delete d_metadata;
+  delete input_slice;
 
   return trace_data;
 }

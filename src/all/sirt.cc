@@ -11,9 +11,7 @@ void SIRTReconSpace::Initialize(int n_grids)
   leng2= new float[2*num_grids];
 }
 
-void SIRTReconSpace::Finalize()
-{
-  AReconSpace::Finalize();
+SIRTReconSpace::~SIRTReconSpace(){
   delete [] leng2;
 }
 

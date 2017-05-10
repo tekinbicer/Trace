@@ -24,7 +24,7 @@ typedef struct {
 
 class TraceMetadata{
   private:
-    float const *theta_;
+    float *theta_;
 
     int const proj_id_;
     int const slice_id_;
@@ -51,7 +51,7 @@ class TraceMetadata{
   public:
 
     TraceMetadata(
-        float const *theta,
+        float *theta,
         int const proj_id,
         int const slice_id,
         int const col_id,
@@ -64,8 +64,7 @@ class TraceMetadata{
         /// Number of neighboring reconstruction slices
         int const num_neighbor_recon_slices,
         float const recon_init_val)
-    : theta_{theta}
-    , proj_id_{proj_id}
+    : proj_id_{proj_id}
     , slice_id_{slice_id}
     , col_id_{col_id}
     , num_total_slices_{num_total_slices}
@@ -85,7 +84,11 @@ class TraceMetadata{
      */
     , num_neighbor_recon_slices_{num_neighbor_recon_slices}
     {
-      if (theta_ == nullptr) throw std::invalid_argument("theta ptr is null");
+      if (theta == nullptr) throw std::invalid_argument("theta ptr is null");
+
+      // Copy theta values
+      theta_ = new float[num_projs];
+      for(int i=0; i<num_projs; ++i) theta_[i] = theta[i];
 
       // Setup recon object
       int num_recon_slices = num_slices_+2*num_neighbor_recon_slices_;
@@ -112,7 +115,7 @@ class TraceMetadata{
     }
 
     TraceMetadata(
-        float const *theta,
+        float *theta,
         int const proj_id,
         int const slice_id,
         int const col_id,

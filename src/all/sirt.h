@@ -32,6 +32,8 @@ class SIRTReconSpace final : public AReconSpace {
     void Reduce(MirroredRegionBareBase<float> &input);
 
     virtual SIRTReconSpace* Clone();
+
+    virtual ~SIRTReconSpace();
 };
 
 #endif

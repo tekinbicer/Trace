@@ -10,17 +10,10 @@ void trace_utils::Absolute(float *data, size_t count)
 void trace_utils::DegreeToRadian(trace_io::H5Data &theta)
 {
   int num_elem = theta.metadata->dims[0];
-  float *buf = new float[num_elem];
-  for(int i=0; i<num_elem; ++i) buf[i] = 0.;
-
-  if(buf==NULL)
-    throw std::invalid_argument("Unable to allocate buffer."); 
+  float *data = static_cast<float*>(theta.data);
 
   for(int i=0; i<num_elem; ++i)
-    buf[i] = static_cast<float*>(theta.data)[i]*kPI/180.0;
-
-  free(theta.data);
-  theta.data = buf;
+    data[i] = data[i]*kPI/180.0;
 }
 
 // Backprojection

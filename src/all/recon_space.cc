@@ -62,7 +62,16 @@ AReconSpace::AReconSpace(int rows, int cols) :
 
 AReconSpace::~AReconSpace()
 {
-  Finalize();
+  delete [] coordx;
+  delete [] coordy;
+  delete [] ax;
+  delete [] ay;
+  delete [] bx;
+  delete [] by;
+  delete [] coorx;
+  delete [] coory;
+  delete [] leng;
+  delete [] indi;
 }
 
 void AReconSpace::Reduce(MirroredRegionBareBase<float> &input)
@@ -175,18 +184,4 @@ void AReconSpace::Initialize(int n_grids)
 void AReconSpace::CopyTo(AReconSpace &target)
 {
   target.Initialize(num_grids);
-}
-
-void AReconSpace::Finalize()
-{
-  delete [] coordx;
-  delete [] coordy;
-  delete [] ax;
-  delete [] ay;
-  delete [] bx;
-  delete [] by;
-  delete [] coorx;
-  delete [] coory;
-  delete [] leng;
-  delete [] indi;
 }
