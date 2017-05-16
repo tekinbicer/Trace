@@ -1,5 +1,105 @@
 #include "sirt.h"
 
+#ifdef SIMD
+
+const int MY_SIMD_WIDTH = 16;
+
+/// Forward Projection SIMD
+float SIRTReconSpace::CalculateSimdata(
+    float *recon,
+    int len,
+    int *indi,
+    float *leng)
+{
+  float simdata = 0.;
+  int i = 0;
+  
+  //SIMD processing, note: change computation order
+  __m512 vec_simdata = _mm512_setzero_ps();  
+  for(; i < len - 1 - MY_SIMD_WIDTH; i += MY_SIMD_WIDTH){
+    //simdata += recon[indi[i]]*leng[i];
+    __m512 vec_leng = _mm512_load_ps((__m512*)(leng + i));
+    __m512i vec_indi = _mm512_load_epi32((__m512i*)(indi + i));
+    __m512 vec_recon = _mm512_i32gather_ps(vec_indi, recon, 4);
+    vec_simdata = _mm512_add_ps(vec_simdata, _mm512_mul_ps(vec_recon, vec_leng));
+  }
+
+  simdata = _mm512_reduce_add_ps(vec_simdata); 
+
+  //Process the rest
+  for(; i < len-1; ++i){
+    simdata += recon[indi[i]]*leng[i];
+  }
+
+  return simdata;
+}
+
+//SIMD
+void SIRTReconSpace::UpdateReconReplica(
+    float simdata,
+    float ray,
+    int curr_slice,
+    int const * const indi,
+    float *leng2,
+    float *leng, 
+    int len)
+{
+  float upd=0., a2=0.;
+
+  auto &slice_t = reduction_objects()[curr_slice];
+  auto slice = &slice_t[0];
+
+  int i = 0;
+  //SIMD processing, note: change computation order
+  __m512 vec_a2 = _mm512_setzero_ps();  
+  for(; i < len - 1 - MY_SIMD_WIDTH; i += MY_SIMD_WIDTH){
+    //a2 += leng2[i];
+    __m512 vec_leng2 = _mm512_load_ps((__m512*)(leng2 + i));
+    vec_a2 = _mm512_add_ps(vec_a2, vec_leng2);
+  }
+
+  a2 = _mm512_reduce_add_ps(vec_a2); 
+
+  //Process the rest
+  for (; i<len-1; ++i)
+    a2 += leng2[i];
+
+  upd = (ray-simdata) / a2;
+
+  i=0;
+
+  //TODO: OPT
+  //SIMD processing
+  for(; i < len - 1 - MY_SIMD_WIDTH; i += MY_SIMD_WIDTH){
+    //size_t index = indi[i]*2;
+    //slice[index] += leng[i]*upd; 
+    //slice[index+1] += leng[i];
+    __m512i vec_indi = _mm512_load_epi32((__m512i*)(indi + i));
+    __m512 vec_leng = _mm512_load_ps((__m512*)(leng + i));
+    //TODO: scatter with conflict detection
+    vec_indi = _mm512_add_epi32(vec_indi, vec_indi);
+    __m512 vec_slice_i = _mm512_i32gather_ps(vec_indi, slice, 4);
+    __m512 vec_slice_i_1 = _mm512_i32gather_ps(_mm512_add_epi32(vec_indi, _mm512_set1_epi32(1)), slice, 4);
+
+    vec_slice_i = _mm512_add_ps(vec_slice_i, _mm512_mul_ps(vec_leng, _mm512_set1_ps(upd)));
+    vec_slice_i_1 = _mm512_add_ps(vec_slice_i_1, vec_leng);
+    _mm512_i32scatter_ps(slice, vec_indi, vec_slice_i, 4);
+    _mm512_i32scatter_ps(slice, _mm512_add_epi32(vec_indi, _mm512_set1_epi32(1)), vec_slice_i_1, 4);
+  }
+
+  //Process the rest
+  //#pragma vector aligned
+  for (; i<(len-1); ++i) {
+    size_t index = indi[i]*2;
+    slice[index] += leng[i]*upd; 
+    slice[index+1] += leng[i];
+  }
+}
+
+
+
+#else //Scalar
+
 /// Forward Projection
 float SIRTReconSpace::CalculateSimdata(
     float *recon,
@@ -16,20 +116,6 @@ float SIRTReconSpace::CalculateSimdata(
     simdata += recon[indi[i]]*leng[i];
   }
   return simdata;
-}
-
-void SIRTReconSpace::UpdateRecon(
-    ADataRegion<float> &recon,                  // Reconstruction object
-    DataRegion2DBareBase<float> &comb_replica)  // Locally combined replica
-{
-  size_t rows = comb_replica.rows();
-  size_t cols = comb_replica.cols()/2;
-  for(size_t i=0; i<rows; ++i){
-    auto replica = comb_replica[i];
-    for(size_t j=0; j<cols; ++j)
-      recon[i*cols + j] +=
-        replica[j*2] / replica[j*2+1];
-  }
 }
 
 void SIRTReconSpace::UpdateReconReplica(
@@ -64,9 +150,40 @@ void SIRTReconSpace::UpdateReconReplica(
 }
 
 
+#endif
+
+
+void SIRTReconSpace::UpdateRecon(
+    ADataRegion<float> &recon,                  // Reconstruction object
+    DataRegion2DBareBase<float> &comb_replica)  // Locally combined replica
+{
+  size_t rows = comb_replica.rows();
+  size_t cols = comb_replica.cols()/2;
+  for(size_t i=0; i<rows; ++i){
+    auto replica = comb_replica[i];
+    for(size_t j=0; j<cols; ++j)
+      recon[i*cols + j] +=
+        replica[j*2] / replica[j*2+1];
+  }
+}
+
+
 void SIRTReconSpace::Initialize(int n_grids){
   num_grids = n_grids; 
 
+#ifdef SIMD//512-bit alignment
+  coordx = (float *)_mm_malloc((num_grids+1) * sizeof(float), 64);
+  coordy = (float *)_mm_malloc((num_grids+1) * sizeof(float), 64);  
+  ax = (float *)_mm_malloc((num_grids+1) * sizeof(float), 64);
+  ay = (float *)_mm_malloc((num_grids+1) * sizeof(float), 64);
+  bx = (float *)_mm_malloc((num_grids+1) * sizeof(float), 64);
+  by = (float *)_mm_malloc((num_grids+1) * sizeof(float), 64);
+  coorx = (float *)_mm_malloc((2*num_grids) * sizeof(float), 64);
+  coory = (float *)_mm_malloc((2*num_grids) * sizeof(float), 64);
+  leng = (float *)_mm_malloc((2*num_grids) * sizeof(float), 64);
+  leng2 = (float *)_mm_malloc((2*num_grids) * sizeof(float), 64);
+  indi = (int *)_mm_malloc((2*num_grids) * sizeof(int), 64);
+#else
   coordx = new float[num_grids+1]; 
   coordy = new float[num_grids+1];
   ax = new float[num_grids+1];
@@ -78,9 +195,23 @@ void SIRTReconSpace::Initialize(int n_grids){
   leng = new float[2*num_grids];
   leng2 = new float[2*num_grids];
   indi = new int[2*num_grids];
+#endif
 }
 
 void SIRTReconSpace::Finalize(){
+#ifdef SIMD
+  _mm_free(coordx);
+  _mm_free(coordy);
+  _mm_free(ax);
+  _mm_free(ay);
+  _mm_free(bx);
+  _mm_free(by);
+  _mm_free(coorx);
+  _mm_free(coory);
+  _mm_free(leng);
+  _mm_free(leng2);
+  _mm_free(indi);
+#else
   delete [] coordx;
   delete [] coordy;
   delete [] ax;
@@ -92,6 +223,7 @@ void SIRTReconSpace::Finalize(){
   delete [] leng;
   delete [] leng2;
   delete [] indi;
+#endif
 }
 
 void SIRTReconSpace::Reduce(MirroredRegionBareBase<float> &input)

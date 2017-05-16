@@ -13,10 +13,31 @@
 #include "reduction_space_a.h"
 #include "data_region_base.h"
 
+#define SIMD
+#ifdef SIMD
+#include <immintrin.h>
+#endif
+
+
 class SIRTReconSpace : 
   public AReductionSpaceBase<SIRTReconSpace, float>
 {
   private:
+#ifdef SIMD //512-bit alignment
+    __declspec(align(64)) float *coordx = nullptr;
+    __declspec(align(64)) float *coordy = nullptr;
+    __declspec(align(64)) float *ax = nullptr;
+    __declspec(align(64)) float *ay = nullptr;
+    __declspec(align(64)) float *bx = nullptr;
+    __declspec(align(64)) float *by = nullptr;
+    __declspec(align(64)) float *coorx = nullptr;
+    __declspec(align(64)) float *coory = nullptr;
+    __declspec(align(64)) float *leng = nullptr;
+    __declspec(align(64)) float *leng2 = nullptr;
+    __declspec(align(64)) int *indi = nullptr;
+
+    __declspec(align(64)) int num_grids;
+#else
     float *coordx = nullptr;
     float *coordy = nullptr;
     float *ax = nullptr;
@@ -30,6 +51,7 @@ class SIRTReconSpace :
     int *indi = nullptr;
 
     int num_grids;
+#endif
 
   protected:
     // Forward projection
