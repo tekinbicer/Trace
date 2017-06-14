@@ -5,6 +5,16 @@
 
 class MLEMReconSpace final : public AReconSpace
 {
+  private:
+    void UpdateReconReplicaV(
+        float simdata,
+        float ray,
+        int const * const restrict indi,
+        float *restrict leng,
+        int len,
+        float * restrict slice,
+        float *restrict slice2);
+
   public:
     MLEMReconSpace(int rows, int cols) : 
       AReconSpace(rows, cols) {};

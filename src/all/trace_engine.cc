@@ -31,6 +31,9 @@ TraceEngine::TraceEngine(TraceData &trace_data, DISPCommBase<float> &dcomm, Trac
   /* MLEM */
   else if(recon_alg=="mlem"){
     trace_data.metadata().InitImage(1.);
+//    main_recon_space= new MLEMReconSpace(
+//        trace_data.metadata().num_slices()*2, 
+//        trace_data.metadata().num_cols()*trace_data.metadata().num_cols());
     main_recon_space= new MLEMReconSpace(
         trace_data.metadata().num_slices(), 
         2*trace_data.metadata().num_cols()*trace_data.metadata().num_cols());

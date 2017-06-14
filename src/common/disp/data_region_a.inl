@@ -1,10 +1,19 @@
 /** Constructors & Assignments */
+
+
+
 template <typename T>
 ADataRegion<T>::ADataRegion(const size_t count)
-  : data_{new T[count]}
-  , count_{count}
+// data_{new T[count]}
+  : count_{count}
   , index_{0}
-{}
+{
+  #if defined(__AVX512F__) && defined(T_KNL_OPTIMIZED)
+  data_ = (T*)_mm_malloc(count_*sizeof(T), 64);
+  #else
+  data_ = new T[count_];
+  #endif
+}
 
 template <typename T>
 ADataRegion<T>::ADataRegion(T * const data, const size_t count)
@@ -15,10 +24,16 @@ ADataRegion<T>::ADataRegion(T * const data, const size_t count)
 
 template <typename T>
 ADataRegion<T>::ADataRegion(const ADataRegion<T> &region)
-  : data_{new T[region.count_]}
-  , count_{region.count_}
+//  : data_{new T[region.count_]}
+  : count_{region.count_}
   , index_{0}
 {
+  #if defined(__AVX512F__) && defined(T_KNL_OPTIMIZED)
+  data_ = (T*)_mm_malloc(region.count_*sizeof(T), 64);
+  #else
+  data_ = new T[region.count_];
+  #endif
+  
   std::copy(region.data_, region.data_ + region.count_, data_);
 }
 
@@ -38,7 +53,11 @@ ADataRegion<T>& ADataRegion<T>::operator=(const ADataRegion<T> &region)
   if(this != &region) {
     if(region.count_ != count_){
       Clear();
+      #if defined(__AVX512F__) && defined(T_KNL_OPTIMIZED)
+      data_ = (T*)_mm_malloc(region.count_*sizeof(T), 64);
+      #else
       data_ = new T[region.count_];
+      #endif
     }
     std::copy(region.data_, region.data_ + region.count_, data_);
 
@@ -73,7 +92,12 @@ template <typename T>
 void ADataRegion<T>::Clear(){
   //std::cout << "ADataRegion: In the clear" << std::endl;
   if(data_ != nullptr){
+    std::cout << "Clearing data region=" << data_ << std::endl;
+    #if defined(__AVX512F__) && defined(T_KNL_OPTIMIZED)
+    _mm_free(data_);
+    #else
     delete [] data_;
+    #endif
     data_ = nullptr;
   }
   count_ = 0;

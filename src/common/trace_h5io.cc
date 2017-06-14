@@ -150,6 +150,7 @@ trace_io::H5Data* trace_io::ReadSlices(
   /* H5F_ACC_RDWR: Fails if exists */
   /* H5F_ACC_TRUNC: Overwrites if exists */
   /* H5F_ACC_RDONLY: Read only */
+  std::cout << "Opening:" << metadata.file_path << std::endl;
   hid_t file_id = H5Fopen(metadata.file_path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
   /* Open an existing dataset. */
   hid_t dataset_id = H5Dopen2(file_id, metadata.dataset_path.c_str(), H5P_DEFAULT);
@@ -220,7 +221,12 @@ trace_io::H5Data* trace_io::ReadSlices(
 
   size_t nelem_per_slice = metadata.dims[0] * metadata.dims[2];
   size_t nelem_slices = nelem_per_slice * count;
-  char *dset_data = new char[nelem_slices*ldtype_size];
+  char *dset_data;
+  #if defined(__AVX512F__) && defined(T_KNL_OPTIMIZED)
+  dset_data = (char *)_mm_malloc(nelem_slices*ldtype_size, 64);
+  #else
+  dset_data = new char[nelem_slices*ldtype_size];
+  #endif
   for(size_t i=0; i<nelem_slices*ldtype_size; ++i)
     (static_cast<char*>(dset_data))[i] = 0x00;
 

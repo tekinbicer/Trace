@@ -9,10 +9,6 @@ float AReconSpace::CalculateSimdata(
 {
   float simdata = 0.;
   for(int i=0; i<len-1; ++i){
-#ifdef PREFETCHON
-    size_t index = indi[i+32];
-    __builtin_prefetch(&(recon[index]),1,0);
-#endif
     simdata += recon[indi[i]]*leng[i];
   }
   return simdata;
@@ -62,6 +58,18 @@ AReconSpace::AReconSpace(int rows, int cols) :
 
 AReconSpace::~AReconSpace()
 {
+  #if defined(__AVX512F__) && defined(T_KNL_OPTIMIZED)
+  _mm_free(coordx);
+  _mm_free(coordy);
+  _mm_free(ax);
+  _mm_free(ay);
+  _mm_free(bx);
+  _mm_free(by);
+  _mm_free(coorx);
+  _mm_free(coory);
+  _mm_free(leng);
+  _mm_free(indi);
+  #else
   delete [] coordx;
   delete [] coordy;
   delete [] ax;
@@ -72,6 +80,7 @@ AReconSpace::~AReconSpace()
   delete [] coory;
   delete [] leng;
   delete [] indi;
+  #endif
 }
 
 void AReconSpace::Reduce(MirroredRegionBareBase<float> &input)
@@ -169,6 +178,18 @@ void AReconSpace::Initialize(int n_grids)
 {
   num_grids = n_grids; 
 
+  #if defined(__AVX512F__) && defined(T_KNL_OPTIMIZED)
+  coordx = (float *)_mm_malloc((num_grids+1) * sizeof(float), 64);
+  coordy = (float *)_mm_malloc((num_grids+1) * sizeof(float), 64);  
+  ax = (float *)_mm_malloc((num_grids+1) * sizeof(float), 64);
+  ay = (float *)_mm_malloc((num_grids+1) * sizeof(float), 64);
+  bx = (float *)_mm_malloc((num_grids+1) * sizeof(float), 64);
+  by = (float *)_mm_malloc((num_grids+1) * sizeof(float), 64);
+  coorx = (float *)_mm_malloc((2*num_grids) * sizeof(float), 64);
+  coory = (float *)_mm_malloc((2*num_grids) * sizeof(float), 64);
+  leng = (float *)_mm_malloc((2*num_grids) * sizeof(float), 64);
+  indi = (int *)_mm_malloc((2*num_grids) * sizeof(int), 64);
+  #else
   coordx = new float[num_grids+1]; 
   coordy = new float[num_grids+1];
   ax = new float[num_grids+1];
@@ -179,6 +200,7 @@ void AReconSpace::Initialize(int n_grids)
   coory = new float[2*num_grids];
   leng = new float[2*num_grids];
   indi = new int[2*num_grids];
+  #endif
 }
 
 void AReconSpace::CopyTo(AReconSpace &target)
