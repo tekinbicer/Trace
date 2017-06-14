@@ -12,7 +12,7 @@ BINDIR = $(ROOTDIR)/bin/
 CFLAGS = -O3 -xMIC-AVX512 -mcmodel medium -shared-intel -std=c++11 
 #CFLAGS += -qopt-report=4 -ipo -qopt-report-phase=loop,vec,cg,ipo -qopt-report-file=make-report.txt -qopt-report-embed  # -qopt-report-phase=loop,vec,cg 
 #CFLAGS += -guide -guide-file=guide-file.txt
-CFLAGS += -g -S -fsource-asm
+#CFLAGS += -g -S -fsource-asm
 CFLAGS += -restrict -qopt-prefetch=3 # -qopt-prefetch=5 # Test the prefetcher
 CFLAGS += -Wall -Wextra -DTIMERON # -fast # Less precision
 CFLAGS += -DT_KNL_OPTIMIZED # Enable KNL optimizations
