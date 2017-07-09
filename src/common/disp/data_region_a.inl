@@ -92,7 +92,7 @@ template <typename T>
 void ADataRegion<T>::Clear(){
   //std::cout << "ADataRegion: In the clear" << std::endl;
   if(data_ != nullptr){
-    std::cout << "Clearing data region=" << data_ << std::endl;
+    //std::cout << "Clearing data region=" << data_ << std::endl;
     #if defined(__AVX512F__) && defined(T_KNL_OPTIMIZED)
     _mm_free(data_);
     #else

@@ -36,7 +36,7 @@ TraceEngine::TraceEngine(TraceData &trace_data, DISPCommBase<float> &dcomm, Trac
 //        trace_data.metadata().num_cols()*trace_data.metadata().num_cols());
     main_recon_space= new MLEMReconSpace(
         trace_data.metadata().num_slices(), 
-        2*trace_data.metadata().num_cols()*trace_data.metadata().num_cols());
+        2*trace_data.metadata().num_cols()*trace_data.metadata().num_cols()+2*trace_data.metadata().num_cols()); //XXX: handle seg fault
     main_recon_space->Initialize(trace_data.metadata().num_grids());
     float init_val=0.;
     main_recon_space->reduction_objects().ResetAllItems(init_val);
@@ -92,7 +92,8 @@ void TraceEngine::IterativeReconstruction(TraceData &trace_data, int iteration){
   auto &main_recon_replica = main_recon_space->reduction_objects();
 
   #ifdef TIMERON
-  std::chrono::duration<double> recon_tot(0.), inplace_tot(0.), update_tot(0.);
+  std::chrono::duration<double> loop_tot(0.), recon_tot(0.), inplace_tot(0.), update_tot(0.);
+  auto loop_beg=std::chrono::system_clock::now();
   #endif
   for(int i=0; i<iteration; ++i){
     std::cout << "Iteration: " << i << std::endl;
@@ -127,6 +128,17 @@ void TraceEngine::IterativeReconstruction(TraceData &trace_data, int iteration){
     engine->ResetReductionSpaces(init_val);
     trace_data.sinograms().ResetMirroredRegionIter();
   }
+  #ifdef TIMERON
+  loop_tot = std::chrono::system_clock::now()-loop_beg;
+
+  if(comm.rank()==0){
+    std::cout << "Total loop time=" << loop_tot.count() << std::endl;
+    std::cout << "Per iter. loop time=" << 1.*loop_tot.count()/iteration << std::endl;
+    std::cout << "Reconstruction time=" << recon_tot.count() << std::endl;
+    std::cout << "Local combination time=" << inplace_tot.count() << std::endl;
+    std::cout << "Update time=" << update_tot.count() << std::endl;
+  }
+  #endif
 }
 
 

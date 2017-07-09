@@ -92,7 +92,7 @@ class TraceMetadata{
 
       // Setup recon object
       int num_recon_slices = num_slices_+2*num_neighbor_recon_slices_;
-      recon_ = new DataRegionBareBase<float>(num_recon_slices * num_grids_ * num_grids_);
+      recon_ = new DataRegionBareBase<float>(num_recon_slices * num_grids_ * num_grids_ + 2*num_grids_); ///XXX: handle seg fault
       InitImage(recon_init_val);
       
       // Set the center
