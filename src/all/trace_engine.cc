@@ -48,11 +48,11 @@ TraceEngine::TraceEngine(TraceData &trace_data, DISPCommBase<float> &dcomm, Trac
   /* PML */
   else if(recon_alg=="pml"){
     trace_data.metadata().InitImage(1.);
-    PMLDataRegion sinograms(  
+    PMLDataRegion *sinograms = new PMLDataRegion(  
         dynamic_cast<DataRegionBase<float, TraceMetadata>&>(
           trace_data.sinograms()
           ));
-    trace_data.sinograms(&sinograms);
+    trace_data.sinograms(sinograms);
     main_recon_space= new PMLReconSpace(
         trace_data.metadata().num_slices(), 
         2*trace_data.metadata().num_cols()*trace_data.metadata().num_cols());
@@ -115,7 +115,10 @@ void TraceEngine::IterativeReconstruction(TraceData &trace_data, int iteration){
     /// Update reconstruction object
     auto update_beg = std::chrono::system_clock::now();
     #endif
-    main_recon_space->UpdateRecon(trace_data.metadata().recon(), main_recon_replica);
+    if(config.kReconstructionAlg == "pml")
+      main_recon_space->UpdateRecon(trace_data.sinograms(), main_recon_replica);
+    else 
+      main_recon_space->UpdateRecon(trace_data.metadata().recon(), main_recon_replica);
     #ifdef TIMERON
     update_tot += (std::chrono::system_clock::now()-update_beg);
     #endif

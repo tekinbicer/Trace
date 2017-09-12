@@ -59,7 +59,7 @@ PMLReconSpace* PMLReconSpace::Clone()
 }
 
 void PMLReconSpace::UpdateRecon(
-    ADataRegion<float> &slices_,                      // Input slices, metadata, recon
+    ADataRegion<float> &slices_,                // Input slices, metadata, recon
     DataRegion2DBareBase<float> &comb_replica)  // Locally combined replica
 {
   PMLDataRegion &slices = dynamic_cast<PMLDataRegion&>(slices_);
