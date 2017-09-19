@@ -15,6 +15,7 @@
 
 constexpr float kPI = 3.14159265358979f;
 
+/// Note: this is a mutable struct.
 struct LocalReconParams {
 
   void Initialize(int n_grids){

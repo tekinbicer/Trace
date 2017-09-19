@@ -36,15 +36,15 @@ void PMLDataRegion::SetFG(float val)
   }
 }
 
-float* PMLDataRegion::F() const { return F_; };
-float* PMLDataRegion::G() const { return G_; };
+float* PMLDataRegion::F() const { return F_; }
+float* PMLDataRegion::G() const { return G_; }
 
 
 
 /** PMLReconSpace */
 
 PMLReconSpace::PMLReconSpace(int rows, int cols) :
-  AReconSpace(rows, cols) {};
+  AReconSpace(rows, cols) {}
 
 PMLReconSpace* PMLReconSpace::Clone()
 {
