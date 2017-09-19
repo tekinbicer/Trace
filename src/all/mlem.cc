@@ -1,9 +1,10 @@
 #include "mlem.h"
 
 void MLEMReconSpace::UpdateRecon(
-    ADataRegion<float> &recon,                  // Reconstruction object
+    TraceData &trace_data,
     DataRegion2DBareBase<float> &comb_replica)  // Locally combined replica
 {
+  ADataRegion<float> &recon = trace_data.metadata().recon();
   size_t rows = comb_replica.rows();
   size_t cols = comb_replica.cols()/2;
   for(size_t i=0; i<rows; ++i){
@@ -20,7 +21,7 @@ void MLEMReconSpace::UpdateReconReplica(
     float ray,
     int curr_slice,
     int const * const indi,
-    float *leng, 
+    float *norms, 
     int len)
 {
   float upd;
@@ -31,14 +32,21 @@ void MLEMReconSpace::UpdateReconReplica(
   upd = (ray/simdata);
 
   for (int i=0; i <len-1; ++i) {
-#ifdef PREFETCHON
-    size_t index2 = indi[i+32]*2;
-    __builtin_prefetch(slice+index2,1,0);
-#endif
     size_t index = indi[i]*2;
-    slice[index] += leng[i]*upd;
-    slice[index+1] += leng[i];
+    slice[index] += norms[i]*upd;
+    slice[index+1] += norms[i];
   }
+}
+
+void MLEMReconSpace::PartialBackProjection()
+{
+  UpdateReconReplica(
+      reconparams.simdata,
+      (*reconparams.rays)[reconparams.curr_col],
+      reconparams.curr_slice,
+      reconparams.indi,
+      reconparams.norms,
+      reconparams.len);
 }
 
 

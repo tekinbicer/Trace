@@ -4,20 +4,14 @@
 #include "recon_space.h"
 
 class SIRTReconSpace final : public AReconSpace {
-  private:
-
-  protected:
-    float *  leng2 = nullptr;
-
   public:
     SIRTReconSpace(int rows, int cols);
 
-    void Initialize(int n_grids);
     void Finalize();
 
     /// Backprojection
     void UpdateRecon(
-        ADataRegion<float> &recon,                  /// Reconstruction object
+        TraceData &trace_data,
         DataRegion2DBareBase<float> &comb_replica); /// Locally combined replica
 
     void UpdateReconReplica(
@@ -29,11 +23,9 @@ class SIRTReconSpace final : public AReconSpace {
         float * /* leng */, 
         int /* len */);
 
-    void Reduce(MirroredRegionBareBase<float> &input);
+    void PartialBackProjection();
 
     virtual SIRTReconSpace* Clone();
-
-    virtual ~SIRTReconSpace();
 };
 
 #endif

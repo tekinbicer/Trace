@@ -1,5 +1,5 @@
 # Compiler
-CC = clang++
+CC = mpiicpc
 
 # Directories
 ROOTDIR = ../..
@@ -15,17 +15,17 @@ COMMONDIR = $(ROOTDIR)/src/common
 # DISP Framework src dir
 DISPDIR = $(COMMONDIR)/disp
 
-HDF5_HOME=/local
+HDF5_HOME = "/home/bicer/projects/phdf5"
 HDF5INC = ${HDF5_HOME}/include
 HDF5LIB = ${HDF5_HOME}/lib
 
-LIBS = -lhdf5 -lmpich # -lpthread
-LIBDIRS = -L$(HDF5LIB) -L/usr/lib64/mpich-3.2/lib
-INCLUDES = -I$(DISPDIR) -I$(COMMONDIR) -I$(HDF5INC) -I/usr/include/mpich-3.2-x86_64
+LIBS = -lhdf5 #-lmpich # -lpthread
+LIBDIRS = -L$(HDF5LIB) #-L/usr/lib64/mpich-3.2/lib
+INCLUDES = -I$(DISPDIR) -I$(COMMONDIR) -I$(HDF5INC) #-I/usr/include/mpich-3.2-x86_64
 
 # Executable/reconstruction objects
 TRACE_OBJS = trace.o
-RECON_OBJS =  sirt.o mlem.o pml.o # Reconstruction codes
+RECON_OBJS =  recon_space.o sirt.o mlem.o pml.o # Reconstruction codes
 COMMON_OBJS = trace_utils.o trace_h5io.o trace_runtime_config.o trace_engine.o trace_ph5io.o
 
 # Executables
@@ -54,6 +54,8 @@ trace_engine.o: trace_engine.cc trace_engine.h
 trace_ph5io.o: trace_ph5io.cc trace_ph5io.h
 	$(CC) $(CFLAGS) -c trace_ph5io.cc $(INCLUDES)
 
+recon_space.o: recon_space.cc recon_space.h
+	$(CC) $(CFLAGS) -c recon_space.cc $(INCLUDES)
 sirt.o: sirt.cc sirt.h
 	$(CC) $(CFLAGS) -c sirt.cc $(INCLUDES)
 mlem.o: mlem.cc mlem.h

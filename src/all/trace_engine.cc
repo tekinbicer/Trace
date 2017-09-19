@@ -115,10 +115,7 @@ void TraceEngine::IterativeReconstruction(TraceData &trace_data, int iteration){
     /// Update reconstruction object
     auto update_beg = std::chrono::system_clock::now();
     #endif
-    if(config.kReconstructionAlg == "pml")
-      main_recon_space->UpdateRecon(trace_data.sinograms(), main_recon_replica);
-    else 
-      main_recon_space->UpdateRecon(trace_data.metadata().recon(), main_recon_replica);
+    main_recon_space->UpdateRecon(trace_data, main_recon_replica);
     #ifdef TIMERON
     update_tot += (std::chrono::system_clock::now()-update_beg);
     #endif
