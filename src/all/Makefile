@@ -26,7 +26,7 @@ COMMONDIR = $(ROOTDIR)/src/common
 # DISP Framework src dir
 DISPDIR = $(COMMONDIR)/disp
 
-HDF5_HOME=${KNL_LOCAL_HOME}
+HDF5_HOME = ${HDF5_DIR}
 HDF5INC = ${HDF5_HOME}/include
 HDF5LIB = ${HDF5_HOME}/lib
 
