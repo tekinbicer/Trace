@@ -6,14 +6,14 @@
 class MLEMReconSpace final : public AReconSpace
 {
   private:
-    void UpdateReconReplicaV(
+    void UpdateReconReplica(
         float simdata,
         float ray,
         int const * const restrict indi,
-        float *restrict leng,
+        float* restrict norms,
         int len,
-        float * restrict slice,
-        float *restrict slice2);
+        float* restrict slice,
+        float* restrict slice2);
 
   public:
     MLEMReconSpace(int rows, int cols) : 
@@ -21,16 +21,18 @@ class MLEMReconSpace final : public AReconSpace
 
     // Backprojection
     void UpdateRecon(
-        ADataRegion<float> &recon,                  // Reconstruction object
+        TraceData &trace_data,
         DataRegion2DBareBase<float> &comb_replica);  // Locally combined replica
 
     void UpdateReconReplica(
-        float simdata,
-        float ray,
-        int curr_slice,
-        int const * const indi,
-        float *leng, 
-        int len);
+      float simdata,
+      float ray,
+      int curr_slice,
+      int const * const restrict indi,
+      float* restrict norms, 
+      int len);
+
+    void PartialBackProjection();
 
     virtual MLEMReconSpace* Clone();
 };

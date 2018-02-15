@@ -1,7 +1,5 @@
 #include "pml.h"
 
-
-
 /** PMLDataRegion */
 
 PMLDataRegion::PMLDataRegion(
@@ -29,22 +27,24 @@ PMLDataRegion::~PMLDataRegion() {
 void PMLDataRegion::SetFG(float val)
 {
   size_t count = 
-    metadata().num_slices()*metadata().num_grids()*metadata().num_grids();
+    metadata().num_slices()*
+      metadata().num_grids()*
+      metadata().num_grids();
   for(size_t i=0; i<count; ++i){
     F_[i]=val;
     G_[i]=val;
   }
 }
 
-float* PMLDataRegion::F() const { return F_; };
-float* PMLDataRegion::G() const { return G_; };
+float* PMLDataRegion::F() const { return F_; }
+float* PMLDataRegion::G() const { return G_; }
 
 
 
 /** PMLReconSpace */
 
 PMLReconSpace::PMLReconSpace(int rows, int cols) :
-  AReconSpace(rows, cols) {};
+  AReconSpace(rows, cols) {}
 
 PMLReconSpace* PMLReconSpace::Clone()
 {
@@ -56,29 +56,6 @@ PMLReconSpace* PMLReconSpace::Clone()
   static_cast<PMLReconSpace*>(this)->CopyTo(*cloned_obj);
 
   return cloned_obj;
-}
-
-void PMLReconSpace::UpdateRecon(
-    ADataRegion<float> &slices_,                      // Input slices, metadata, recon
-    DataRegion2DBareBase<float> &comb_replica)  // Locally combined replica
-{
-  PMLDataRegion &slices = dynamic_cast<PMLDataRegion&>(slices_);
-  auto &recon = slices.metadata().recon();
-  size_t rows = comb_replica.rows();
-  size_t cols = comb_replica.cols()/2;
-
-  float *F = slices.F();
-  float *G = slices.G();
-
-  for(size_t i=0; i<rows; ++i){
-    auto replica = comb_replica[i];
-    for(size_t j=0; j<cols; ++j){
-      size_t index = (i*cols) + j;
-      recon[index] =
-        (-G[index] + sqrt(G[index]*G[index] - 8*replica[j*2]*F[index])) /
-        (4*F[index]);
-    }
-  }
 }
 
 void PMLReconSpace::CalculateFG(
@@ -260,13 +237,49 @@ void PMLReconSpace::CalculateFG(
   }
 }
 
+void PMLReconSpace::UpdateRecon(
+    TraceData &trace_data,
+    DataRegion2DBareBase<float> &comb_replica)  // Locally combined replica
+{
+  PMLDataRegion &slices = dynamic_cast<PMLDataRegion&>(trace_data.sinograms());
+  auto &recon = trace_data.metadata().recon();
+  size_t rows = comb_replica.rows();
+  size_t cols = comb_replica.cols()/2;
+
+  float *F = slices.F();
+  float *G = slices.G();
+
+  for(size_t i=0; i<rows; ++i){
+    auto replica = comb_replica[i];
+    for(size_t j=0; j<cols; ++j){
+      size_t index = (i*cols) + j;
+      recon[index] =
+        (-G[index] + sqrt(G[index]*G[index] - 8*replica[j*2]*F[index])) /
+        (4*F[index]);
+    }
+  }
+}
+
+void PMLReconSpace::PartialBackProjection()
+{
+  UpdateReconReplica(
+    reconparams.simdata,
+    (*reconparams.rays)[reconparams.curr_col],
+    reconparams.recon,
+    reconparams.curr_slice,
+    reconparams.indi,
+    reconparams.norms,
+    reconparams.len);
+}
+
+
 void PMLReconSpace::UpdateReconReplica(
     float simdata,
     float ray,
     float *recon,
     int curr_slice,
     int const * const indi,
-    float *leng, 
+    float *norms, 
     int len)
 {
   auto &slice_t = reduction_objects()[curr_slice];
@@ -274,14 +287,10 @@ void PMLReconSpace::UpdateReconReplica(
 
   float upd = ray/simdata;
   for (int i=0; i <len-1; ++i) {
-#ifdef PREFETCHON
-    size_t indi2 = indi[i+32];
-    size_t index2 = indi2*2;
-    __builtin_prefetch(recon+indi2,1,0);
-    __builtin_prefetch(slice+index2,1,0);
-#endif
     size_t index = indi[i]*2;
-    slice[index] -= recon[indi[i]]*leng[i]*upd;
-    slice[index+1] += leng[i];
+    slice[index] -= recon[indi[i]]*norms[i]*upd;
+    slice[index+1] += norms[i];
   }
 }
+
+

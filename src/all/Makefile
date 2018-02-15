@@ -36,7 +36,7 @@ INCLUDES = -I$(DISPDIR) -I$(COMMONDIR) -I$(HDF5INC)
 
 # Executable/reconstruction objects
 TRACE_OBJS = trace.o
-RECON_OBJS =  recon_space.o sirt.o mlem.o pml.o # Reconstruction codes
+RECON_OBJS =  recon_space.o sirt.o mlem.o pml.o apmlr.o # Reconstruction codes
 COMMON_OBJS = trace_utils.o trace_h5io.o trace_runtime_config.o trace_engine.o trace_ph5io.o
 
 # Executables
@@ -73,6 +73,8 @@ mlem.o: mlem.cc mlem.h
 	$(CC) $(CFLAGS) -c mlem.cc $(INCLUDES)
 pml.o: pml.cc pml.h
 	$(CC) $(CFLAGS) -c pml.cc $(INCLUDES)
+apmlr.o: apmlr.cc apmlr.h
+	$(CC) $(CFLAGS) -c apmlr.cc $(INCLUDES)
 
 install:
 	mv $(PROGS) $(BINDIR)

@@ -1,9 +1,10 @@
 #include "mlem.h"
 
 void MLEMReconSpace::UpdateRecon(
-    ADataRegion<float> &recon,                  // Reconstruction object
+    TraceData &trace_data,
     DataRegion2DBareBase<float> &comb_replica)  // Locally combined replica
 {
+  ADataRegion<float> &recon = trace_data.metadata().recon();
   size_t rows = comb_replica.rows();
   size_t cols = comb_replica.cols()/2;
   for(size_t i=0; i<rows; ++i){
@@ -29,7 +30,7 @@ void MLEMReconSpace::UpdateReconReplica(
     float ray,
     int curr_slice,
     int const * const restrict indi,
-    float *restrict leng, 
+    float *restrict norms, 
     int len)
 {
 
@@ -41,21 +42,21 @@ void MLEMReconSpace::UpdateReconReplica(
 //  float * restrict slice = &(reduction_objects()[curr_slice][0]);
 //  float * restrict slice2 = &(reduction_objects()[curr_slice+1][0]);
 
-  UpdateReconReplicaV(
+  UpdateReconReplica(
     simdata,
     ray,
     indi,
-    leng, 
+    norms, 
     len,
     slice,
     slice2);
 }
 
-void MLEMReconSpace::UpdateReconReplicaV(
+void MLEMReconSpace::UpdateReconReplica(
     float simdata,
     float ray,
     int const * const restrict indi,
-    float *restrict leng, 
+    float *restrict norms, 
     int len,
     float *restrict slice,
     float *restrict slice2)
@@ -68,24 +69,27 @@ void MLEMReconSpace::UpdateReconReplicaV(
   __assume_aligned(indi, 64);
   __assume_aligned(slice, 64);
   __assume_aligned(slice2, 64);
-  __assume_aligned(leng, 64);
+  __assume_aligned(norms, 64);
 
   //#pragma prefetch slice:1:3  // prefetch to L2 cache 3 iterations ahead
   #pragma ivdep
   #endif
   for (int i=0; i <len-1; ++i) {
     size_t index = indi[i]*2;
-    slice[index] += leng[i]*upd;
-    slice[index+1] += leng[i];
+    slice[index] += norms[i]*upd;
+    slice[index+1] += norms[i];
   }
+}
 
-  //#pragma vector always assert
-//  #pragma ivdep
-//  for (int i=0; i <len-1; ++i) {
-//    size_t index = indi[i];
-//    slice[index] += leng[i]*upd;
-//    slice2[index] += leng[i];
-//  }
+void MLEMReconSpace::PartialBackProjection()
+{
+  UpdateReconReplica(
+      reconparams.simdata,
+      (*reconparams.rays)[reconparams.curr_col],
+      reconparams.curr_slice,
+      reconparams.indi,
+      reconparams.norms,
+      reconparams.len);
 }
 
 MLEMReconSpace* MLEMReconSpace::Clone()

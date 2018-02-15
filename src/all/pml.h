@@ -3,7 +3,6 @@
 
 #include "recon_space.h"
 #include "trace_data.h"
-#include "trace_utils.h"
 #include "reduction_space_a.h"
 #include "data_region_base.h"
 
@@ -39,25 +38,31 @@ class PMLDataRegion final : public DataRegionBase<float, TraceMetadata>{
 
 class PMLReconSpace final : public AReconSpace
 {
-  public:
-    PMLReconSpace(int rows, int cols);
-
-    void UpdateRecon(
-        ADataRegion<float> &slices_,                 // Input slices, metadata, recon
-        DataRegion2DBareBase<float> &comb_replica);  // Locally combined replica
-
-    void CalculateFG(
-        ADataRegion<float> &slices_,
-        float beta);
-
+  private:
     void UpdateReconReplica(
         float simdata,
         float ray,
         float *recon,
         int curr_slice,
         int const * const indi,
-        float *leng, 
+        float *norms, 
         int len);
+
+
+  protected:
+    void PartialBackProjection();
+
+
+  public:
+    PMLReconSpace(int rows, int cols);
+
+    void UpdateRecon(
+        TraceData &trace_data,
+        DataRegion2DBareBase<float> &comb_replica);  // Locally combined replica
+
+    void CalculateFG(
+        ADataRegion<float> &slices_,
+        float beta);
 
     virtual PMLReconSpace* Clone();
 };

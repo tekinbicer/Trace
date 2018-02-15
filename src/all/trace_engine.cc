@@ -3,6 +3,7 @@
 #include "sirt.h"
 #include "pml.h"
 #include "mlem.h"
+#include "apmlr.h"
 
 TraceEngine::TraceEngine(TraceData &trace_data, DISPCommBase<float> &dcomm, TraceRuntimeConfig &conf)
   : trace_data {trace_data},
@@ -51,11 +52,11 @@ TraceEngine::TraceEngine(TraceData &trace_data, DISPCommBase<float> &dcomm, Trac
   /* PML */
   else if(recon_alg=="pml"){
     trace_data.metadata().InitImage(1.);
-    PMLDataRegion sinograms(  
+    PMLDataRegion *sinograms = new PMLDataRegion(  
         dynamic_cast<DataRegionBase<float, TraceMetadata>&>(
           trace_data.sinograms()
           ));
-    trace_data.sinograms(&sinograms);
+    trace_data.sinograms(sinograms);
     main_recon_space= new PMLReconSpace(
         trace_data.metadata().num_slices(), 
         2*trace_data.metadata().num_cols()*trace_data.metadata().num_cols());
@@ -72,8 +73,25 @@ TraceEngine::TraceEngine(TraceData &trace_data, DISPCommBase<float> &dcomm, Trac
   }
 
   else if(recon_alg=="apmlr"){
-    std::cerr << "Algorithm is not ready: " << recon_alg << std::endl;
-    exit(0);
+    trace_data.metadata().InitImage(1.);
+    APMLRDataRegion *sinograms = new APMLRDataRegion(  
+        dynamic_cast<DataRegionBase<float, TraceMetadata>&>(
+          trace_data.sinograms()
+          ));
+    trace_data.sinograms(sinograms);
+    main_recon_space= new APMLRReconSpace(
+        trace_data.metadata().num_slices(), 
+        2*trace_data.metadata().num_cols()*trace_data.metadata().num_cols());
+    main_recon_space->Initialize(trace_data.metadata().num_grids());
+    float init_val=0.;
+    main_recon_space->reduction_objects().ResetAllItems(init_val);
+
+    /* Prepare processing engine and main reduction space for other threads */
+    engine.reset(
+        new DISPEngineReduction<AReconSpace, float>(
+          &comm,
+          main_recon_space,
+          thread_count));
   }
   else{
     std::cerr << "Unknown algorithm: " << recon_alg << std::endl;
@@ -109,17 +127,23 @@ void TraceEngine::IterativeReconstruction(TraceData &trace_data, int iteration){
     #ifdef TIMERON
     inplace_tot += (std::chrono::system_clock::now()-inplace_beg);
 
-    /// Penalized 
+    /// Handle penalized algorithms
     if(config.kReconstructionAlg == "pml"){
       dynamic_cast<PMLDataRegion&>(trace_data.sinograms()).SetFG(0.);
       dynamic_cast<PMLReconSpace&>(*main_recon_space).
         CalculateFG(trace_data.sinograms(), config.b0);
     }
+    if(config.kReconstructionAlg == "apmlr"){
+      dynamic_cast<APMLRDataRegion&>(trace_data.sinograms()).SetFG(0.);
+      dynamic_cast<APMLRReconSpace&>(*main_recon_space).
+        CalculateFG(trace_data.sinograms(), config.b0, config.b1, config.d0, config.d1, config.regw);
+    }
+
 
     /// Update reconstruction object
     auto update_beg = std::chrono::system_clock::now();
     #endif
-    main_recon_space->UpdateRecon(trace_data.metadata().recon(), main_recon_replica);
+    main_recon_space->UpdateRecon(trace_data, main_recon_replica);
     #ifdef TIMERON
     update_tot += (std::chrono::system_clock::now()-update_beg);
     #endif
